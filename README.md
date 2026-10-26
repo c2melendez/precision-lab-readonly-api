@@ -1,4 +1,4 @@
-# Precision Lab — API de certificación de solo lectura
+# Precision Lab — Bridge API de certificación
 
 **Estado actualizado (corte 2026-10-26 16:57 UTC):** el planificador v2 está desplegado en Render. El deploy actual `dep-dbfnu8nlk1mc73fksl6g` está `live` sobre el commit `b6d5efdcae0802d5b5a24c79d8d7373bfa9e1acd`. Los logs confirman que Uvicorn inició y la aplicación terminó su arranque.
 
@@ -18,7 +18,7 @@ Servicio HTTP de Bridge para que un GPT personalizado consulte evidencia y solic
 | GET | `/v1/runs/{run_id}?repo=lite\|plus` | Evidencia bruta de Actions, jobs/pasos y registro del runner relacionado cuando puede encontrarse. |
 | GET | `/openapi.json` / `/openapi.yaml` | Especificación importable para GPT Actions. |
 
-La API acepta únicamente los alias `lite` y `plus`, no nombres de repositorio arbitrarios. Responde con `Cache-Control: no-store`; el indicador `X-Read-Only` distingue las rutas de lectura de los endpoints de operación. Los POST solo crean una rama/PR, solicitan el Runner con decisión `RUN`, o intentan una fusión explícitamente solicitada después de validar los checks. `success` de GitHub Actions nunca se transforma automáticamente en `PASS`.
+La API acepta únicamente los alias `lite` y `plus`, no nombres de repositorio arbitrarios. Para correcciones sucesivas, conserva el mismo `change_id` y refresca `expected_head_sha` antes de enviar la nueva versión; así se actualiza el mismo PR. Usa un `change_id` nuevo para una tarea independiente. Responde con `Cache-Control: no-store`; el indicador `X-Read-Only` distingue las rutas de lectura de los endpoints de operación. Los POST crean/actualizan un PR de tarea, solicitan el Runner con decisión `RUN`, o intentan una fusión explícitamente solicitada después de validar los checks. `success` de GitHub Actions nunca se transforma automáticamente en `PASS`.
 
 ## Seguridad requerida
 
@@ -30,7 +30,7 @@ Configura `GITHUB_READ_TOKEN` como un fine-grained token restringido a `c2melend
 - Repository permissions: **Actions: Read**.
 - Metadata: Read (permiso de lectura estándar del repositorio).
 
-No coloques el PAT dentro del prompt ni en la Action del GPT. `GITHUB_READ_TOKEN` permanece restringido a Contents: Read, Actions: Read y Metadata: Read. Para las nuevas rutas de operación, configura un secreto independiente `GITHUB_WRITE_TOKEN`, restringido a los dos repositorios y con Contents: Write, Pull requests: Write, Actions: Write, Workflows: Write y Metadata: Read. El token de escritura queda en Render y nunca se devuelve en respuestas. El `GH_TOKEN` del Runner sigue siendo un secreto separado del workflow; GitHub no lo transfiere automáticamente a Render.
+No coloques el PAT dentro del prompt ni en la Action del GPT. `GITHUB_READ_TOKEN` permanece restringido a Contents: Read, Actions: Read y Metadata: Read. Para las nuevas rutas de operación, configura un secreto independiente `GITHUB_WRITE_TOKEN`, restringido a los dos repositorios y con Contents: Write, Pull requests: Write, Actions: Write, Workflows: Write y Metadata: Read. El token de escritura queda en Render y nunca se devuelve en respuestas. El `GH_TOKEN` del Runner sigue siendo un secreto separado del workflow; GitHub no lo transfiere automáticamente a Render. Para `POST /v1/changes`, mantén el mismo `change_id` a través de correcciones para actualizar una sola rama/PR; el ref actualizado provoca la validación del nuevo HEAD, sin un despacho manual paralelo.
 
 ### GPT Action
 
@@ -78,7 +78,7 @@ Este directorio debe publicarse como un repositorio independiente. **No agregues
 4. En Render, crea un Blueprint desde ese repositorio y revisa el recurso antes de aplicar. El `render.yaml` está en la raíz y tiene `autoDeployTrigger: off`.
 5. Introduce `GITHUB_READ_TOKEN`, `SERVICE_API_KEY` y, para las rutas POST de Bridge, `GITHUB_WRITE_TOKEN` como secretos en Render; nunca los guardes en Git. El token de lectura requiere Contents: Read y Actions: Read. El token de escritura requiere Contents: Write, Pull requests: Write, Actions: Write, Workflows: Write y Metadata: Read, restringido a Lite/Plus.
 6. En Render → **Settings → Health Checks**, configura `/healthz` y confirma que el ajuste del servicio deje de reportar `healthCheckPath` vacío. El archivo `render.yaml` ya declara esa ruta, pero el ajuste observado en el Dashboard todavía no la reflejaba.
-7. Confirma que `PUBLIC_BASE_URL=https://precision-lab-readonly-api.onrender.com` corresponda al host público. El `render.yaml` actual ya contiene ese valor. Si cambias configuración, realiza el despliegue manual correspondiente porque `autoDeployTrigger: off`.
+7. El build de Render ejecuta `pytest -q` antes de desplegar; si falla la suite, el nuevo deploy debe fallar en vez de promover código no validado. Confirma que `PUBLIC_BASE_URL=https://precision-lab-readonly-api.onrender.com` corresponda al host público. El `render.yaml` actual ya contiene ese valor. Si cambias configuración, realiza el despliegue manual correspondiente porque `autoDeployTrigger: off`.
 8. En Windows PowerShell 5.1, ejecuta `./scripts/verify-live-api.ps1 -BaseUrl "https://precision-lab-readonly-api.onrender.com"`. El verificador pide `SERVICE_API_KEY` con entrada oculta y comprueba HTTPS, URL de OpenAPI, allowlist de métodos/rutas, estado bilateral y que el planificador indique `action_taken=false`. No realiza ninguna operación de escritura ni despacha gates. La prueba aún debe ejecutarse después de confirmar secretos y health check.
 9. Descarga `https://precision-lab-readonly-api.onrender.com/openapi.yaml`, verifica que `servers[0].url` corresponda exactamente al host y luego impórtalo como Action en el GPT. Configura `X-API-Key` en la autenticación de la Action.
 10. Revisa que las advertencias de `/v1/status` se clasifiquen correctamente antes de interpretar el estado.
