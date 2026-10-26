@@ -134,7 +134,7 @@ async def unexpected_error_handler(request: Request, exc: Exception):
     # Do not echo exceptions that could contain request context or credential fragments.
     return JSONResponse(
         status_code=500,
-        content={"error": "internal_error", "detail": "Unexpected internal error; no write action was attempted.", "read_only": True},
+        content={"error": "internal_error", "detail": "Unexpected internal error; reconcile operation state before retrying.", "read_only": request.method in ("GET", "HEAD", "OPTIONS")},
     )
 
 
