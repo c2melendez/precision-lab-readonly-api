@@ -36,6 +36,8 @@ def validate_change_paths(files: list[dict[str, str]]) -> None:
         if path in seen:
             raise ValueError(f"Duplicate file path: {path}")
         seen.add(path)
+        if re.fullmatch(r"qa/certification/runner/[0-9]{1,20}\.json", path):
+            raise ValueError("Bridge requests cannot modify runner evidence records")
         if _SECRET_NAME.search(path):
             raise ValueError(f"Refusing to publish a path that looks like a secret or private key: {path}")
         if not isinstance(content, str):
