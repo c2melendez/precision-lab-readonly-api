@@ -28,10 +28,9 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 app = FastAPI(
     title="Precision Lab Certification Bridge API",
     version="0.1.0",
-    summary="Read-only continuity, gate-planning, and GitHub Actions evidence for Precision Lab Lite and Plus.",
+    summary="Read-only evidence and guarded write operations for Precision Lab Lite and Plus.",
     description=(
-        "Observation-only service for a GPT custom Action. No endpoint can dispatch, "
-        "cancel, re-run, publish, push, or otherwise mutate certification resources. "
+        "Authenticated Bridge API for a GPT Action. Read routes expose live evidence; write routes create reviewable change PRs, dispatch a gate only when the live planner says RUN, and merge only an exact validated PR head. "
         "A GitHub Actions success is raw evidence and never an automatic certification PASS."
     ),
     docs_url=None,
@@ -45,7 +44,8 @@ async def read_only_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Read-Only"] = "true"
+    response.headers["X-Read-Only"] = "true" if request.method in ("GET", "HEAD", "OPTIONS") else "false"
+    response.headers["X-Operation-Mode"] = "read-only" if request.method in ("GET", "HEAD", "OPTIONS") else "write-capable"
     return response
 
 
@@ -89,7 +89,7 @@ def get_github_writer() -> Iterator[GitHubWriteClient]:
 
 @app.exception_handler(GitHubApiError)
 async def github_error_handler(request: Request, exc: GitHubApiError):
-    status_code = exc.status_code if exc.status_code in (404, 502, 503) else 502
+    status_code = exc.status_code if exc.status_code in (404, 409, 502, 503) else 502
     body = {"error": "upstream_error", "detail": exc.message, "read_only": request.method in ("GET", "HEAD", "OPTIONS"), "mutation_attempted": request.method not in ("GET", "HEAD", "OPTIONS")}
     return JSONResponse(status_code=status_code, content=body)
 
