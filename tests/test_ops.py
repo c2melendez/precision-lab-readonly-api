@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-from app.ops import DispatchRequest, _auth, _validate
+from app.ops import DispatchRequest, _auth, _ensure_dispatch_enabled, _validate
 
 
 class DispatchValidationTests(unittest.TestCase):
@@ -40,6 +40,16 @@ class DispatchValidationTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as raised:
             _validate(request)
         self.assertEqual(raised.exception.status_code, 422)
+
+    def test_dispatch_is_disabled_by_default(self):
+        with patch.dict(os.environ, {"OPS_DISPATCH_ENABLED": ""}, clear=False):
+            with self.assertRaises(HTTPException) as raised:
+                _ensure_dispatch_enabled()
+        self.assertEqual(raised.exception.status_code, 503)
+
+    def test_dispatch_can_only_be_enabled_explicitly(self):
+        with patch.dict(os.environ, {"OPS_DISPATCH_ENABLED": "true"}, clear=False):
+            _ensure_dispatch_enabled()
 
     def test_auth_requires_configured_key(self):
         with patch.dict(os.environ, {"OPS_API_KEY": ""}, clear=False):
