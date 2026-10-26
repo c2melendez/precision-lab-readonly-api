@@ -13,13 +13,15 @@ from fastapi.security import APIKeyHeader
 
 from .config import Settings
 from .github_api import GitHubApiError, GitHubReadClient
-from .models import ErrorResponse, GatePlanResponse, RunEvidenceResponse, StatusResponse
+from .models import ChangeOperationResponse, ChangeRequest, ErrorResponse, GateExecutionResponse, GatePlanResponse, MergeOperationResponse, MergeRequest, RunEvidenceResponse, StatusResponse
 from .service import (
     StateMismatchError,
     get_gate_plan,
     get_run_evidence,
     get_status,
 )
+from .github_write import GitHubWriteClient
+from .operations import create_change_request, execute_gate_request, merge_pull_request
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -70,15 +72,30 @@ def get_github() -> Iterator[GitHubReadClient]:
         client.close()
 
 
+def get_github_writer() -> Iterator[GitHubWriteClient]:
+    settings = Settings.from_env()
+    try:
+        client = GitHubWriteClient(
+            token=settings.github_write_token,
+            timeout=settings.request_timeout_seconds,
+        )
+    except GitHubApiError as exc:
+        raise HTTPException(status_code=503, detail=exc.message) from exc
+    try:
+        yield client
+    finally:
+        client.close()
+
+
 @app.exception_handler(GitHubApiError)
-async def github_error_handler(_request: Request, exc: GitHubApiError):
+async def github_error_handler(request: Request, exc: GitHubApiError):
     status_code = exc.status_code if exc.status_code in (404, 502, 503) else 502
-    body = {"error": "upstream_error", "detail": exc.message, "read_only": True}
+    body = {"error": "upstream_error", "detail": exc.message, "read_only": request.method in ("GET", "HEAD", "OPTIONS"), "mutation_attempted": request.method not in ("GET", "HEAD", "OPTIONS")}
     return JSONResponse(status_code=status_code, content=body)
 
 
 @app.exception_handler(StarletteHTTPException)
-async def http_error_handler(_request: Request, exc: StarletteHTTPException):
+async def http_error_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 401:
         error = "unauthorized"
     elif exc.status_code == 404:
@@ -91,29 +108,29 @@ async def http_error_handler(_request: Request, exc: StarletteHTTPException):
         error = "request_rejected"
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": error, "detail": str(exc.detail), "read_only": True},
+        content={"error": error, "detail": str(exc.detail), "read_only": request.method in ("GET", "HEAD", "OPTIONS"), "mutation_attempted": request.method not in ("GET", "HEAD", "OPTIONS")},
     )
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_error_handler(_request: Request, exc: RequestValidationError):
+async def validation_error_handler(request: Request, exc: RequestValidationError):
     # Return only field/error type, not user-supplied values.
     return JSONResponse(
         status_code=422,
-        content={"error": "validation_error", "detail": "Invalid request parameters", "read_only": True},
+        content={"error": "validation_error", "detail": "Invalid request parameters", "read_only": request.method in ("GET", "HEAD", "OPTIONS"), "mutation_attempted": request.method not in ("GET", "HEAD", "OPTIONS")},
     )
 
 
 @app.exception_handler(StateMismatchError)
-async def state_mismatch_handler(_request: Request, exc: StateMismatchError):
+async def state_mismatch_handler(request: Request, exc: StateMismatchError):
     return JSONResponse(
         status_code=409,
-        content={"error": "state_reconciliation_required", "detail": str(exc), "read_only": True},
+        content={"error": "state_reconciliation_required", "detail": str(exc), "read_only": request.method in ("GET", "HEAD", "OPTIONS"), "mutation_attempted": request.method not in ("GET", "HEAD", "OPTIONS")},
     )
 
 
 @app.exception_handler(Exception)
-async def unexpected_error_handler(_request: Request, exc: Exception):
+async def unexpected_error_handler(request: Request, exc: Exception):
     # Do not echo exceptions that could contain request context or credential fragments.
     return JSONResponse(
         status_code=500,
@@ -206,6 +223,84 @@ def run_evidence(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post(
+    "/v1/gates/{gate}/execute",
+    tags=["Operations"],
+    response_model=GateExecutionResponse,
+    dependencies=[Depends(require_api_key)],
+    responses={
+        400: {"model": ErrorResponse, "description": "Unknown or policy-blocked gate"},
+        401: {"model": ErrorResponse, "description": "Missing or invalid API key"},
+        409: {"model": ErrorResponse, "description": "Canonical state requires reconciliation"},
+        503: {"model": ErrorResponse, "description": "GitHub write credential or Actions API unavailable"},
+    },
+)
+def execute_gate(
+    gate: Annotated[str, Path(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$")],
+    repo: Literal["lite", "plus"] = Query(...),
+    client: GitHubReadClient = Depends(get_github),
+    writer: GitHubWriteClient = Depends(get_github_writer),
+):
+    """Execute only when the live planner says RUN; every other decision is a no-op."""
+    try:
+        return execute_gate_request(client, writer, repo, gate)
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc).strip("'")) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post(
+    "/v1/changes",
+    tags=["Operations"],
+    response_model=ChangeOperationResponse,
+    dependencies=[Depends(require_api_key)],
+    responses={
+        400: {"model": ErrorResponse, "description": "Unsafe or invalid change request"},
+        401: {"model": ErrorResponse, "description": "Missing or invalid API key"},
+        409: {"model": ErrorResponse, "description": "Stale base SHA or canonical state mismatch"},
+        503: {"model": ErrorResponse, "description": "GitHub write credential or API unavailable"},
+    },
+)
+def create_change(
+    change: ChangeRequest,
+    client: GitHubReadClient = Depends(get_github),
+    writer: GitHubWriteClient = Depends(get_github_writer),
+):
+    """Create one reviewable branch and PR; do not push to canonical or manually dispatch gates."""
+    try:
+        return create_change_request(client, writer, change.model_dump(mode="json"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post(
+    "/v1/pull-requests/{pr_number}/merge",
+    tags=["Operations"],
+    response_model=MergeOperationResponse,
+    dependencies=[Depends(require_api_key)],
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid PR number or expected SHA"},
+        401: {"model": ErrorResponse, "description": "Missing or invalid API key"},
+        409: {"model": ErrorResponse, "description": "PR state or checks do not allow merge"},
+        503: {"model": ErrorResponse, "description": "GitHub write credential or API unavailable"},
+    },
+)
+def merge_change(
+    pr_number: Annotated[int, Path(ge=1)],
+    merge: MergeRequest,
+    client: GitHubReadClient = Depends(get_github),
+    writer: GitHubWriteClient = Depends(get_github_writer),
+):
+    """Merge only the exact current PR head after all check-runs are complete and successful."""
+    try:
+        return merge_pull_request(client, writer, merge.repo, pr_number, merge.expected_head_sha)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/openapi.yaml", include_in_schema=False)
