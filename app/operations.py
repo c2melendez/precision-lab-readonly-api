@@ -141,9 +141,16 @@ def _create_change_request_unlocked(
     requested_change_id = payload.get("change_id")
     if requested_change_id is None:
         slug = re.sub(r"[^A-Za-z0-9._-]+", "-", str(payload.get("title", "")).strip()).strip("-._").lower()
-        requested_change_id = slug[:40] or f"auto-{operation_id[:16]}"
-    if not isinstance(requested_change_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,47}", requested_change_id):
-        raise ValueError("change_id must start with a letter/number and contain only letters, numbers, dot, underscore, or hyphen (max 48 characters)")
+        slug = re.sub(r"\.{2,}", "-", slug)[:30].rstrip("-.")
+        requested_change_id = f"{slug}-{operation_id[:10]}" if slug else f"auto-{operation_id[:16]}"
+    if (
+        not isinstance(requested_change_id, str)
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,47}", requested_change_id)
+        or ".." in requested_change_id
+        or requested_change_id.endswith(".")
+        or requested_change_id.lower().endswith(".lock")
+    ):
+        raise ValueError("change_id must be a valid stable branch suffix (letters, numbers, dot, underscore or hyphen; max 48 characters; no '..', trailing dot, or .lock suffix)")
     branch_name = f"bridge-{requested_change_id}"
 
     pointers, _defaults = resolve_canonical_branches(read_client)
