@@ -90,7 +90,7 @@ def get_github_writer() -> Iterator[GitHubWriteClient]:
 @app.exception_handler(GitHubApiError)
 async def github_error_handler(request: Request, exc: GitHubApiError):
     status_code = exc.status_code if exc.status_code in (404, 409, 502, 503) else 502
-    body = {"error": "upstream_error", "detail": exc.message, "read_only": request.method in ("GET", "HEAD", "OPTIONS"), "mutation_attempted": request.method not in ("GET", "HEAD", "OPTIONS")}
+    body = {"error": "upstream_error", "detail": exc.message, "read_only": request.method in ("GET", "HEAD", "OPTIONS")}
     return JSONResponse(status_code=status_code, content=body)
 
 
