@@ -4,7 +4,7 @@ import json
 
 from fastapi.testclient import TestClient
 
-from app.main import app, get_github
+from app.main import app, get_github, get_github_writer
 
 BRANCH = "qa/syntax-audit-in625-a1"
 
@@ -163,17 +163,31 @@ def test_status_is_read_only_and_sanitizes_document_package_url(monkeypatch):
         app.dependency_overrides.clear()
 
 
-def test_no_mutating_operations_are_exposed():
+def test_bridge_operations_are_explicit_and_api_key_protected():
     schema = app.openapi()
     assert schema["components"]["securitySchemes"]["APIKeyHeader"] == {
         "type": "apiKey", "in": "header", "name": "X-API-Key"
     }
     assert schema["paths"]["/v1/status"]["get"]["security"] == [{"APIKeyHeader": []}]
-    allowed = {"get", "parameters", "summary", "description", "servers"}
+    assert "/v1/changes" in schema["paths"]
+    assert "/v1/gates/{gate}/execute" in schema["paths"]
+    assert "/v1/pull-requests/{pr_number}/merge" in schema["paths"]
+    expected_methods = {
+        "/healthz": {"get"},
+        "/v1/status": {"get"},
+        "/v1/gates/{gate}/plan": {"get"},
+        "/v1/runs/{run_id}": {"get"},
+        "/v1/gates/{gate}/execute": {"post"},
+        "/v1/changes": {"post"},
+        "/v1/pull-requests/{pr_number}/merge": {"post"},
+        "/openapi.yaml": {"get"},
+    }
     for path, definition in schema["paths"].items():
-        operations = {key.lower() for key in definition if key.lower() in {"get", "post", "put", "patch", "delete", "options", "head", "trace"}}
-        assert operations <= {"get"}, f"Non-read-only method exposed at {path}: {operations}"
-
+        methods = {key.lower() for key in definition if key.lower() in {"get", "post", "put", "patch", "delete", "options", "head", "trace"}}
+        assert methods == expected_methods[path], f"Unexpected methods at {path}: {methods}"
+        if path.startswith("/v1/"):
+            for method in methods:
+                assert definition[method].get("security") == [{"APIKeyHeader": []}], f"Missing API-key security on {method.upper()} {path}"
 
 def test_gate_plan_is_advisory_only_and_plus_security_is_hard_blocked(monkeypatch):
     monkeypatch.setenv("SERVICE_API_KEY", "test-key")
