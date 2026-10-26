@@ -29,9 +29,10 @@ app = FastAPI(
     version="0.1.0",
     summary="Certification evidence plus separately authenticated, allowlisted runner dispatch.",
     description=(
-        "Observation-only service for a GPT custom Action. No endpoint can dispatch, "
-        "cancel, re-run, publish, push, or otherwise mutate certification resources. "
-        "A GitHub Actions success is raw evidence and never an automatic certification PASS."
+        "Read-only evidence endpoints use X-API-Key. Operational runner dispatch is isolated "
+        "behind X-Ops-Key and a fixed operation allowlist, and remains disabled unless "
+        "OPS_DISPATCH_ENABLED=true. Dispatch acceptance is not evidence of gate completion "
+        "or certification PASS."
     ),
     docs_url=None,
     redoc_url=None,
