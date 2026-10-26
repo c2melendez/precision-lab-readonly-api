@@ -258,7 +258,8 @@ def _create_change_request_unlocked(
         f"repos/{repository}/pulls",
         params={"state": "all", "head": f"c2melendez:{branch_name}", "base": canonical_branch, "per_page": 100},
     )
-    if any(pr.get("head", {}).get("ref") == branch_name for pr in historical_prs if isinstance(historical_prs, list)):
+    historical_pr_list = historical_prs if isinstance(historical_prs, list) else []
+    if any(pr.get("head", {}).get("ref") == branch_name for pr in historical_pr_list):
         raise StateMismatchError(
             f"change_id {requested_change_id!r} already belongs to a closed PR; choose a new change_id for this new task."
         )
