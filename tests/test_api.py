@@ -303,3 +303,74 @@ def test_gate_plan_returns_refresh_before_reading_workflow_history_if_baseline_d
         assert fake.workflow_run_reads == 0
     finally:
         app.dependency_overrides.clear()
+
+
+def test_write_routes_reject_missing_api_key_without_contacting_github(monkeypatch):
+    monkeypatch.setenv("SERVICE_API_KEY", "test-key")
+    fake = FakeGitHub()
+
+    class UnusedWriter:
+        def __getattr__(self, name):
+            raise AssertionError(f"GitHub writer must not be used without API authentication: {name}")
+
+    app.dependency_overrides[get_github] = lambda: fake
+    app.dependency_overrides[get_github_writer] = lambda: UnusedWriter()
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/v1/changes",
+            json={
+                "repo": "lite",
+                "expected_head_sha": "a" * 40,
+                "title": "Document safe operation",
+                "files": [{"path": "qa/certification/CURRENT_STATE.md", "content": "example"}],
+            },
+        )
+        assert response.status_code == 401, response.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_gate_execute_reuse_decision_never_dispatches(monkeypatch):
+    import app.operations as operations
+
+    monkeypatch.setenv("SERVICE_API_KEY", "test-key")
+    fake = FakeGitHub()
+
+    class FakeWriter:
+        def __init__(self):
+            self.dispatch_calls = 0
+
+        def dispatch_workflow(self, *args, **kwargs):
+            self.dispatch_calls += 1
+            raise AssertionError("REUSE must not dispatch GitHub Actions")
+
+    writer = FakeWriter()
+    plan = {
+        "state_status": "CURRENT",
+        "repository_full_name": "c2melendez/precision-lab-lite",
+        "canonical_branch": BRANCH,
+        "observed_head": "a" * 40,
+        "gate": {
+            "decision": "REUSE",
+            "input_fingerprint": "f" * 64,
+            "reason": "Equivalent evidence already exists for the current fingerprint",
+        },
+    }
+    monkeypatch.setattr(operations, "get_gate_plan", lambda *_args: plan)
+    app.dependency_overrides[get_github] = lambda: fake
+    app.dependency_overrides[get_github_writer] = lambda: writer
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/v1/gates/cumulative/execute?repo=lite",
+            headers={"X-API-Key": "test-key"},
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["decision"] == "REUSE"
+        assert payload["action_taken"] is False
+        assert payload["read_only"] is False
+        assert writer.dispatch_calls == 0
+    finally:
+        app.dependency_overrides.clear()
