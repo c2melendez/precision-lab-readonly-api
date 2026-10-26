@@ -154,3 +154,50 @@ def test_merge_rejects_failed_check_without_writing():
     with pytest.raises(StateMismatchError, match="unsuccessful"):
         merge_pull_request(Read(), writer, "lite", 7, HEAD)
     assert writer.merge_calls == 0
+
+
+def test_merge_allows_prose_only_change_without_new_actions():
+    class Read:
+        def get_repo(self, repository):
+            return {"default_branch": "main"}
+
+        def get_content_text(self, repository, path, ref):
+            if path == "qa/certification/README.md" and ref == "main":
+                return f"# Entry\n\n## Rama canónica activa\n`{BRANCH}`\n", "1" * 40
+            if path == "qa/certification/continuity.json":
+                return '{"prose_only_paths":["qa/certification/CURRENT_STATE.md"]}', "2" * 40
+            raise AssertionError((repository, path, ref))
+
+    class Writer:
+        def __init__(self):
+            self.merge_calls = 0
+
+        def get_json(self, path, *, params=None, allow_404=False):
+            if path.endswith("/pulls/8"):
+                return {
+                    "state": "open",
+                    "merged": False,
+                    "draft": False,
+                    "mergeable": True,
+                    "changed_files": 1,
+                    "base": {"ref": BRANCH},
+                    "head": {"sha": HEAD, "repo": {"full_name": "c2melendez/precision-lab-lite"}},
+                    "html_url": "https://github.com/c2melendez/precision-lab-lite/pull/8",
+                }
+            if path.endswith("/pulls/8/files"):
+                return [{"filename": "qa/certification/CURRENT_STATE.md"}]
+            if path.endswith(f"/commits/{HEAD}/check-runs"):
+                return {"total_count": 0, "check_runs": []}
+            raise AssertionError(path)
+
+        def put_json(self, path, body, *, expected=(200, 201)):
+            self.merge_calls += 1
+            assert path.endswith("/pulls/8/merge")
+            assert body["sha"] == HEAD
+            return {"merged": True, "sha": "e" * 40}
+
+    writer = Writer()
+    result = merge_pull_request(Read(), writer, "lite", 8, HEAD)
+    assert result["decision"] == "MERGED"
+    assert result["validated_check_runs"] == []
+    assert writer.merge_calls == 1
