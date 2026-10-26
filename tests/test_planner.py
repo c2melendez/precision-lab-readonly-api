@@ -104,3 +104,36 @@ def test_fingerprint_excludes_explicit_prose_continuity_index_and_generated_runn
     changed_contract = dict(base)
     changed_contract["qa/certification/SY_P_23_CONVENTION.md"] = ["100644", "blob", "9" * 40]
     assert fingerprint(base, gate, prose) != fingerprint(changed_contract, gate, prose)
+
+
+@pytest.mark.parametrize(
+    "technical_path",
+    [
+        ".github/workflows/api-ci.yml",
+        "scripts/certification/continuity.py",
+        "app/planner.py",
+        "app/service.py",
+        "tests/test_planner.py",
+        "qa/certification/fixtures/sg28-cases.jsonl",
+        "qa/certification/SY_P_23_CONVENTION.md",
+        "qa/certification/runner/schema.json",
+        "requirements.txt",
+        "requirements-dev.txt",
+    ],
+)
+def test_fingerprint_changes_for_each_technical_input_category(technical_path):
+    """Generated result records are excluded, but every technical input class is tracked."""
+    gate = {
+        "workflow": ".github/workflows/api-ci.yml",
+        "inputs": ["*"],
+        "acceptance_revision": "fingerprint-regression-v1",
+    }
+    prose = ["qa/certification/CURRENT_STATE.md"]
+    entries = {
+        ".github/workflows/api-ci.yml": ["100644", "blob", "1" * 40],
+        technical_path: ["100644", "blob", "2" * 40],
+    }
+    changed = dict(entries)
+    changed[technical_path] = ["100644", "blob", "3" * 40]
+
+    assert fingerprint(entries, gate, prose) != fingerprint(changed, gate, prose)
