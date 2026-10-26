@@ -7,7 +7,7 @@ import re
 import threading
 from typing import Any
 
-from .config import REPOSITORIES
+from .config import CONTINUITY_PATH, REPOSITORIES
 from .github_api import GitHubApiError, GitHubReadClient
 from .github_write import GitHubWriteClient
 from .service import StateMismatchError, resolve_canonical_branches
@@ -347,6 +347,37 @@ def create_change_request(
         return _create_change_request_unlocked(read_client, write_client, payload)
 
 
+
+def _pull_request_is_prose_only(
+    read_client: GitHubReadClient,
+    write_client: GitHubWriteClient,
+    repository: str,
+    canonical_branch: str,
+    pr_number: int,
+    pr: dict[str, Any],
+) -> bool:
+    expected_count = pr.get("changed_files")
+    if not isinstance(expected_count, int) or expected_count < 1:
+        return False
+    files = write_client.get_json(
+        f"repos/{repository}/pulls/{pr_number}/files",
+        params={"per_page": 100},
+    )
+    if not isinstance(files, list) or len(files) != expected_count:
+        raise StateMismatchError("Pull request file listing is incomplete; cannot apply the prose-only no-run exception.")
+    state_text, _ = read_client.get_content_text(repository, CONTINUITY_PATH, canonical_branch)
+    try:
+        state = json.loads(state_text)
+    except json.JSONDecodeError as exc:
+        raise StateMismatchError("Current continuity.json is invalid; cannot apply a prose-only merge exception.") from exc
+    allowed_paths = state.get("prose_only_paths", [])
+    if not isinstance(allowed_paths, list) or not allowed_paths:
+        return False
+    allow = {item for item in allowed_paths if isinstance(item, str)}
+    changed_paths = {item.get("filename") for item in files if isinstance(item, dict)}
+    return bool(changed_paths) and len(changed_paths) == expected_count and changed_paths.issubset(allow)
+
+
 def merge_pull_request(
     read_client: GitHubReadClient,
     write_client: GitHubWriteClient,
@@ -394,14 +425,15 @@ def merge_pull_request(
     if pr.get("mergeable") is not True:
         raise StateMismatchError("GitHub has not confirmed that the pull request is mergeable; retry after refreshing its state")
 
+    prose_only = _pull_request_is_prose_only(
+        read_client, write_client, repository, canonical_branch, pr_number, pr
+    )
     checks_payload = write_client.get_json(
         f"repos/{repository}/commits/{expected_head_sha}/check-runs",
         params={"per_page": 100},
     )
     checks = checks_payload.get("check_runs", [])
     total_count = int(checks_payload.get("total_count", len(checks)))
-    if total_count == 0:
-        raise StateMismatchError("No check-run evidence exists for this exact PR head; refusing an unvalidated merge")
     if len(checks) < total_count:
         raise StateMismatchError("Check-run evidence is paginated; refresh the complete check list before merging")
 
@@ -413,6 +445,16 @@ def merge_pull_request(
     if incomplete:
         names = ", ".join(str(item.get("name", "unnamed")) for item in incomplete[:8])
         raise StateMismatchError(f"PR checks are pending or unsuccessful: {names}")
+    successful_checks = [
+        item for item in checks
+        if item.get("status") == "completed" and item.get("conclusion") == "success"
+    ]
+    if not successful_checks and not prose_only:
+        raise StateMismatchError(
+            "No successful check exists for this PR head, and the changed paths are not all declared prose-only."
+        )
+    if total_count == 0 and not prose_only:
+        raise StateMismatchError("No check-run evidence exists for this exact PR head; refusing an unvalidated merge")
     check_names = sorted({str(item.get("name", "")) for item in checks if item.get("name")})
     result = write_client.put_json(
         f"repos/{repository}/pulls/{pr_number}/merge",
