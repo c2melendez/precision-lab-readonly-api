@@ -1,0 +1,873 @@
+openapi: 3.1.0
+info:
+  title: Precision Lab Certification Read-only API
+  summary: Read-only continuity, gate-planning, and GitHub Actions evidence for Precision
+    Lab Lite and Plus.
+  description: Observation-only service for a GPT custom Action. No endpoint can dispatch,
+    cancel, re-run, publish, push, or otherwise mutate certification resources. A
+    GitHub Actions success is raw evidence and never an automatic certification PASS.
+  version: 0.1.0
+paths:
+  /healthz:
+    get:
+      tags:
+      - Health
+      summary: Healthz
+      description: Liveness only; intentionally does not call GitHub or disclose configuration.
+      operationId: healthz_healthz_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /v1/status:
+    get:
+      tags:
+      - Status
+      summary: Status
+      description: Read live repo pointers, continuity state, runner version and latest
+        runner record.
+      operationId: status_v1_status_get
+      security:
+      - APIKeyHeader: []
+      parameters:
+      - name: repo
+        in: query
+        required: false
+        schema:
+          enum:
+          - lite
+          - plus
+          - both
+          type: string
+          default: both
+          title: Repo
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '401':
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Repository or continuity resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Canonical branch pointers or continuity state need reconciliation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: GitHub returned incomplete or invalid data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: GitHub credential or API unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/gates/{gate}/plan:
+    get:
+      tags:
+      - Planning
+      summary: Gate Plan
+      operationId: gate_plan_v1_gates__gate__plan_get
+      security:
+      - APIKeyHeader: []
+      parameters:
+      - name: gate
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[A-Za-z0-9._-]+$
+          title: Gate
+      - name: repo
+        in: query
+        required: true
+        schema:
+          enum:
+          - lite
+          - plus
+          type: string
+          title: Repo
+      - name: refresh
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Accepted for compatibility; this implementation always reads
+            fresh GitHub data.
+          default: true
+          title: Refresh
+        description: Accepted for compatibility; this implementation always reads
+          fresh GitHub data.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatePlanResponse'
+        '400':
+          description: Unknown gate or policy-blocked gate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid query or path parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Canonical branch pointers or continuity state need reconciliation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Incomplete source tree or GitHub response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: GitHub credential or API unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/runs/{run_id}:
+    get:
+      tags:
+      - Runs
+      summary: Run Evidence
+      operationId: run_evidence_v1_runs__run_id__get
+      security:
+      - APIKeyHeader: []
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 20
+          pattern: ^[0-9]+$
+          title: Run Id
+      - name: repo
+        in: query
+        required: true
+        schema:
+          enum:
+          - lite
+          - plus
+          type: string
+          title: Repo
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunEvidenceResponse'
+        '400':
+          description: Invalid run ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid query or path parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Run not found in the selected repository
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Canonical branch pointers need reconciliation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: GitHub returned incomplete or invalid data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: GitHub credential or API unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    ActionJob:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        status:
+          type: string
+          title: Status
+        conclusion:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conclusion
+        steps:
+          items:
+            $ref: '#/components/schemas/ActionStep'
+          type: array
+          title: Steps
+      type: object
+      required:
+      - id
+      - name
+      - status
+      title: ActionJob
+    ActionStep:
+      properties:
+        name:
+          type: string
+          title: Name
+        status:
+          type: string
+          title: Status
+        conclusion:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conclusion
+      type: object
+      required:
+      - name
+      - status
+      title: ActionStep
+    Blocker:
+      properties:
+        id:
+          type: string
+          title: Id
+        status:
+          type: string
+          title: Status
+        kind:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Kind
+        detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detail
+      type: object
+      required:
+      - id
+      - status
+      title: Blocker
+    ErrorResponse:
+      properties:
+        error:
+          type: string
+          title: Error
+        detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detail
+        read_only:
+          type: boolean
+          const: true
+          title: Read Only
+          default: true
+      type: object
+      required:
+      - error
+      title: ErrorResponse
+    GatePlan:
+      properties:
+        gate:
+          type: string
+          title: Gate
+        decision:
+          type: string
+          enum:
+          - RUN
+          - WAIT
+          - REUSE
+          - DIAGNOSE
+          - REVIEW
+          - REFRESH
+          title: Decision
+        reason:
+          type: string
+          title: Reason
+        head_sha:
+          type: string
+          pattern: ^[0-9a-f]{40}$
+          title: Head Sha
+        input_fingerprint:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Input Fingerprint
+        run_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Run Id
+        evidence_sha:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{40}$
+          - type: 'null'
+          title: Evidence Sha
+        unavailable_run_ids:
+          items:
+            type: string
+          type: array
+          title: Unavailable Run Ids
+        action_taken:
+          type: boolean
+          const: false
+          title: Action Taken
+          default: false
+      type: object
+      required:
+      - gate
+      - decision
+      - reason
+      - head_sha
+      - input_fingerprint
+      title: GatePlan
+    GatePlanResponse:
+      properties:
+        repository_full_name:
+          type: string
+          title: Repository Full Name
+        canonical_branch:
+          type: string
+          title: Canonical Branch
+        observed_head:
+          type: string
+          pattern: ^[0-9a-f]{40}$
+          title: Observed Head
+        state_revision:
+          type: integer
+          minimum: 0.0
+          title: State Revision
+        state_status:
+          type: string
+          enum:
+          - CURRENT
+          - RECONCILE
+          - REFRESH
+          title: State Status
+        next_action:
+          anyOf:
+          - $ref: '#/components/schemas/NextAction'
+          - type: 'null'
+        reconciliation_action:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reconciliation Action
+        blockers:
+          items:
+            $ref: '#/components/schemas/Blocker'
+          type: array
+          title: Blockers
+        gate:
+          $ref: '#/components/schemas/GatePlan'
+        publication_rule:
+          type: string
+          title: Publication Rule
+        read_only:
+          type: boolean
+          const: true
+          title: Read Only
+          default: true
+        observation:
+          $ref: '#/components/schemas/ObservationMetadata'
+        history_complete:
+          type: boolean
+          title: History Complete
+        history_observed_runs:
+          type: integer
+          minimum: 0.0
+          title: History Observed Runs
+      type: object
+      required:
+      - repository_full_name
+      - canonical_branch
+      - observed_head
+      - state_revision
+      - state_status
+      - next_action
+      - gate
+      - publication_rule
+      - observation
+      - history_complete
+      - history_observed_runs
+      title: GatePlanResponse
+    GitHubRun:
+      properties:
+        id:
+          type: string
+          pattern: ^[0-9]{1,20}$
+          title: Id
+        name:
+          type: string
+          title: Name
+        workflow_path:
+          type: string
+          title: Workflow Path
+        event:
+          type: string
+          title: Event
+        status:
+          type: string
+          title: Status
+        conclusion:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conclusion
+        head_branch:
+          type: string
+          title: Head Branch
+        head_sha:
+          type: string
+          pattern: ^[0-9a-f]{40}$
+          title: Head Sha
+        html_url:
+          type: string
+          title: Html Url
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        run_attempt:
+          type: integer
+          minimum: 1.0
+          title: Run Attempt
+        jobs:
+          items:
+            $ref: '#/components/schemas/ActionJob'
+          type: array
+          title: Jobs
+      type: object
+      required:
+      - id
+      - name
+      - workflow_path
+      - event
+      - status
+      - head_branch
+      - head_sha
+      - html_url
+      - created_at
+      - updated_at
+      - run_attempt
+      title: GitHubRun
+    NextAction:
+      properties:
+        id:
+          type: string
+          title: Id
+        status:
+          type: string
+          title: Status
+        action:
+          type: string
+          title: Action
+      type: object
+      required:
+      - id
+      - status
+      - action
+      title: NextAction
+    ObservationMetadata:
+      properties:
+        source:
+          type: string
+          enum:
+          - github_live
+          - cache
+          title: Source
+        fetched_at:
+          type: string
+          title: Fetched At
+        cache_age_seconds:
+          type: integer
+          minimum: 0.0
+          title: Cache Age Seconds
+        stale:
+          type: boolean
+          title: Stale
+          default: false
+      type: object
+      required:
+      - source
+      - fetched_at
+      - cache_age_seconds
+      title: ObservationMetadata
+    RepositoryStatus:
+      properties:
+        repo:
+          type: string
+          enum:
+          - lite
+          - plus
+          title: Repo
+        repository_full_name:
+          type: string
+          title: Repository Full Name
+        default_branch:
+          type: string
+          title: Default Branch
+        canonical_branch:
+          type: string
+          title: Canonical Branch
+        current_head_sha:
+          type: string
+          pattern: ^[0-9a-f]{40}$
+          title: Current Head Sha
+        technical_baseline_sha:
+          type: string
+          pattern: ^[0-9a-f]{40}$
+          title: Technical Baseline Sha
+        continuity_revision:
+          type: integer
+          minimum: 0.0
+          title: Continuity Revision
+        global_certification:
+          type: string
+          title: Global Certification
+        state_status:
+          type: string
+          enum:
+          - CURRENT
+          - RECONCILE
+          - REFRESH
+          title: State Status
+        next_action:
+          anyOf:
+          - $ref: '#/components/schemas/NextAction'
+          - type: 'null'
+        reconciliation_action:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reconciliation Action
+        blockers:
+          items:
+            $ref: '#/components/schemas/Blocker'
+          type: array
+          title: Blockers
+        runner_workflow:
+          $ref: '#/components/schemas/RunnerWorkflowInfo'
+        latest_runner_record:
+          anyOf:
+          - $ref: '#/components/schemas/RunnerRecord'
+          - type: 'null'
+        continuity_blob_sha:
+          type: string
+          pattern: ^[0-9a-f]{40}$
+          title: Continuity Blob Sha
+        source_links:
+          additionalProperties:
+            type: string
+          type: object
+          title: Source Links
+        observation:
+          $ref: '#/components/schemas/ObservationMetadata'
+      type: object
+      required:
+      - repo
+      - repository_full_name
+      - default_branch
+      - canonical_branch
+      - current_head_sha
+      - technical_baseline_sha
+      - continuity_revision
+      - global_certification
+      - state_status
+      - next_action
+      - runner_workflow
+      - continuity_blob_sha
+      - source_links
+      - observation
+      title: RepositoryStatus
+    RunEvidenceResponse:
+      properties:
+        read_only:
+          type: boolean
+          const: true
+          title: Read Only
+          default: true
+        github_run:
+          $ref: '#/components/schemas/GitHubRun'
+        runner_record:
+          anyOf:
+          - $ref: '#/components/schemas/RunnerRecord'
+          - type: 'null'
+        record_relation:
+          type: string
+          enum:
+          - self
+          - dispatched_by
+          - none
+          title: Record Relation
+        interpretation_note:
+          type: string
+          title: Interpretation Note
+        served_at:
+          type: string
+          title: Served At
+      type: object
+      required:
+      - github_run
+      - record_relation
+      - interpretation_note
+      - served_at
+      title: RunEvidenceResponse
+    RunnerCommit:
+      properties:
+        sha:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sha
+        subject:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Subject
+      type: object
+      title: RunnerCommit
+    RunnerPatchSummary:
+      properties:
+        sha256:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{64}$
+          - type: 'null'
+          title: Sha256
+        bytes:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Bytes
+      type: object
+      title: RunnerPatchSummary
+    RunnerRecord:
+      properties:
+        schema_version:
+          type: integer
+          title: Schema Version
+        operation:
+          anyOf:
+          - type: string
+            enum:
+            - gate
+            - docs
+          - type: 'null'
+          title: Operation
+        repo:
+          type: string
+          title: Repo
+        canonical_branch:
+          type: string
+          title: Canonical Branch
+        base_sha:
+          type: string
+          pattern: ^[0-9a-f]{40}$
+          title: Base Sha
+        gate:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gate
+        workflow:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workflow
+        gate_workflow:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gate Workflow
+        dispatched_run_id:
+          anyOf:
+          - type: string
+            pattern: ^[0-9]{1,20}$
+          - type: 'null'
+          title: Dispatched Run Id
+        dispatched_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dispatched Url
+        dispatched_run_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dispatched Run Url
+        dispatched_status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dispatched Status
+        dispatched_conclusion:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dispatched Conclusion
+        patch:
+          anyOf:
+          - $ref: '#/components/schemas/RunnerPatchSummary'
+          - type: 'null'
+        commits:
+          items:
+            $ref: '#/components/schemas/RunnerCommit'
+          type: array
+          title: Commits
+        paths:
+          items:
+            type: string
+          type: array
+          title: Paths
+        patch_head_sha:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{40}$
+          - type: 'null'
+          title: Patch Head Sha
+        decision:
+          type: string
+          title: Decision
+        runner_run_id:
+          type: string
+          pattern: ^[0-9]{1,20}$
+          title: Runner Run Id
+        runner_run_url:
+          type: string
+          title: Runner Run Url
+        recorded_at:
+          type: string
+          title: Recorded At
+      type: object
+      required:
+      - schema_version
+      - repo
+      - canonical_branch
+      - base_sha
+      - decision
+      - runner_run_id
+      - runner_run_url
+      - recorded_at
+      title: RunnerRecord
+    RunnerWorkflowInfo:
+      properties:
+        version:
+          type: string
+          title: Version
+        workflow_path:
+          type: string
+          title: Workflow Path
+        blob_sha:
+          type: string
+          pattern: ^[0-9a-f]{40}$
+          title: Blob Sha
+      type: object
+      required:
+      - version
+      - workflow_path
+      - blob_sha
+      title: RunnerWorkflowInfo
+    StatusResponse:
+      properties:
+        served_at:
+          type: string
+          title: Served At
+        read_only:
+          type: boolean
+          const: true
+          title: Read Only
+          default: true
+        repositories:
+          items:
+            $ref: '#/components/schemas/RepositoryStatus'
+          type: array
+          minItems: 1
+          title: Repositories
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+      type: object
+      required:
+      - served_at
+      - repositories
+      title: StatusResponse
+  securitySchemes:
+    APIKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+servers:
+- url: https://REPLACE-WITH-READONLY-SERVICE-HOST
+  description: Replace the placeholder with the deployed Render service URL.

@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: precision-lab-readonly-api
+    runtime: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    autoDeployTrigger: "off"
+    envVars:
+      - key: GITHUB_READ_TOKEN
+        sync: false
+      - key: SERVICE_API_KEY
+        sync: false
+      - key: GITHUB_TIMEOUT_SECONDS
+        value: "15"
