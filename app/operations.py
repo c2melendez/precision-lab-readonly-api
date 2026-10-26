@@ -13,7 +13,7 @@ from .service import StateMismatchError, resolve_canonical_branches
 
 
 _FORBIDDEN_PATH_COMPONENTS = {".git", ".github/secrets"}
-_SECRET_NAME = re.compile(r"(^|/)(\.env($|\.)|secrets?\.(json|ya?ml|toml)$|credentials?(\.|$)|id_rsa($|\.)|.*\.(pem|p12|pfx|key)$)", re.I)
+_SECRET_NAME = re.compile(r"(^|/)(secrets?\.(json|ya?ml|toml)$|credentials?(\.|$)|id_rsa($|\.)|.*\.(pem|p12|pfx|key)$)", re.I)
 
 
 def validate_change_paths(files: list[dict[str, str]]) -> None:
@@ -38,6 +38,9 @@ def validate_change_paths(files: list[dict[str, str]]) -> None:
         seen.add(path)
         if re.fullmatch(r"qa/certification/runner/[0-9]{1,20}\.json", path):
             raise ValueError("Bridge requests cannot modify runner evidence records")
+        basename = path.rsplit("/", 1)[-1].lower()
+        if basename == ".env" or (basename.startswith(".env.") and basename not in {".env.example", ".env.sample", ".env.template"}):
+            raise ValueError(f"Refusing to publish an environment secret file: {path}")
         if _SECRET_NAME.search(path):
             raise ValueError(f"Refusing to publish a path that looks like a secret or private key: {path}")
         if not isinstance(content, str):
