@@ -108,7 +108,7 @@ async def http_error_handler(request: Request, exc: StarletteHTTPException):
         error = "request_rejected"
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": error, "detail": str(exc.detail), "read_only": request.method in ("GET", "HEAD", "OPTIONS"), "mutation_attempted": request.method not in ("GET", "HEAD", "OPTIONS")},
+        content={"error": error, "detail": str(exc.detail), "read_only": request.method in ("GET", "HEAD", "OPTIONS")},
     )
 
 
@@ -117,7 +117,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
     # Return only field/error type, not user-supplied values.
     return JSONResponse(
         status_code=422,
-        content={"error": "validation_error", "detail": "Invalid request parameters", "read_only": request.method in ("GET", "HEAD", "OPTIONS"), "mutation_attempted": request.method not in ("GET", "HEAD", "OPTIONS")},
+        content={"error": "validation_error", "detail": "Invalid request parameters", "read_only": request.method in ("GET", "HEAD", "OPTIONS")},
     )
 
 
@@ -125,7 +125,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 async def state_mismatch_handler(request: Request, exc: StateMismatchError):
     return JSONResponse(
         status_code=409,
-        content={"error": "state_reconciliation_required", "detail": str(exc), "read_only": request.method in ("GET", "HEAD", "OPTIONS"), "mutation_attempted": request.method not in ("GET", "HEAD", "OPTIONS")},
+        content={"error": "state_reconciliation_required", "detail": str(exc), "read_only": request.method in ("GET", "HEAD", "OPTIONS")},
     )
 
 
