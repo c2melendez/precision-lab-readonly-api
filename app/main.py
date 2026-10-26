@@ -26,7 +26,7 @@ from .operations import create_change_request, execute_gate_request, merge_pull_
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 app = FastAPI(
-    title="Precision Lab Certification Read-only API",
+    title="Precision Lab Certification Bridge API",
     version="0.1.0",
     summary="Read-only continuity, gate-planning, and GitHub Actions evidence for Precision Lab Lite and Plus.",
     description=(
