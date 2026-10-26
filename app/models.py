@@ -178,6 +178,7 @@ class ChangeFile(APIModel):
 
 class ChangeRequest(APIModel):
     repo: Literal["lite", "plus"]
+    change_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$")
     expected_head_sha: str = Field(pattern=r"^[0-9a-fA-F]{40}$")
     title: str = Field(min_length=8, max_length=120)
     body: str = Field(default="", max_length=12000)
@@ -189,11 +190,12 @@ class ChangeRequest(APIModel):
 class ChangeOperationResponse(APIModel):
     repo: Literal["lite", "plus"]
     repository_full_name: str
-    decision: Literal["REUSE", "PR_CREATED", "PR_REUSED"]
+    decision: Literal["REUSE", "PR_CREATED", "PR_REUSED", "PR_UPDATED"]
     action_taken: bool
     canonical_branch: str
     current_head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     operation_id: str | None = None
+    change_id: str | None = None
     branch: str | None = None
     branch_head_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pull_request_number: int | None = None
