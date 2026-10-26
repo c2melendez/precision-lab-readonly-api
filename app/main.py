@@ -240,12 +240,26 @@ def run_evidence(
 def execute_gate(
     gate: Annotated[str, Path(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$")],
     repo: Literal["lite", "plus"] = Query(...),
+    retry_after_review: bool = Query(
+        default=False,
+        description="Explicitly retry only a recorded failed/not-dispatched attempt after review; never overrides REUSE or a successful run.",
+    ),
+    retry_reason: str | None = Query(
+        default=None,
+        min_length=20,
+        max_length=500,
+        description="Required when retry_after_review=true; briefly record the diagnosed reason.",
+    ),
     client: GitHubReadClient = Depends(get_github),
     writer: GitHubWriteClient = Depends(get_github_writer),
 ):
-    """Execute only when the live planner says RUN; every other decision is a no-op."""
+    """Execute the planned gate, or retry a recorded failed attempt only with an explicit reviewed reason."""
     try:
-        return execute_gate_request(client, writer, repo, gate)
+        return execute_gate_request(
+            client, writer, repo, gate,
+            retry_after_review=retry_after_review,
+            retry_reason=retry_reason,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=str(exc).strip("'")) from exc
     except PermissionError as exc:
