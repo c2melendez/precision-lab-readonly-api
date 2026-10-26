@@ -98,9 +98,11 @@ def _create_change_request_unlocked(
             "detail": "Every requested file already matches the canonical branch; no branch, PR, or Actions run was created.",
         }
 
+    # Fingerprint the requested patch, not the base SHA. If a client retries after
+    # reconciling HEAD, the same patch reuses the already-open PR rather than
+    # creating another branch and triggering another set of Actions.
     fingerprint_input = {
         "repo": alias,
-        "expected_head_sha": payload["expected_head_sha"].lower(),
         "files": [{"path": item["path"], "content_sha256": hashlib.sha256(item["content"].encode("utf-8")).hexdigest()} for item in files],
     }
     operation_id = hashlib.sha256(
