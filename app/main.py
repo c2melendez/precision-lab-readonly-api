@@ -14,6 +14,7 @@ from fastapi.security import APIKeyHeader
 from .config import Settings
 from .github_api import GitHubApiError, GitHubReadClient
 from .models import ErrorResponse, GatePlanResponse, RunEvidenceResponse, StatusResponse
+from .ops import router as ops_router
 from .service import (
     StateMismatchError,
     get_gate_plan,
@@ -26,11 +27,12 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 app = FastAPI(
     title="Precision Lab Certification Read-only API",
     version="0.1.0",
-    summary="Read-only continuity, gate-planning, and GitHub Actions evidence for Precision Lab Lite and Plus.",
+    summary="Certification evidence plus separately authenticated, allowlisted runner dispatch.",
     description=(
-        "Observation-only service for a GPT custom Action. No endpoint can dispatch, "
-        "cancel, re-run, publish, push, or otherwise mutate certification resources. "
-        "A GitHub Actions success is raw evidence and never an automatic certification PASS."
+        "Read-only evidence endpoints use X-API-Key. Operational runner dispatch is isolated "
+        "behind X-Ops-Key and a fixed operation allowlist, and remains disabled unless "
+        "OPS_DISPATCH_ENABLED=true. Dispatch acceptance is not evidence of gate completion "
+        "or certification PASS."
     ),
     docs_url=None,
     redoc_url=None,
@@ -43,7 +45,7 @@ async def read_only_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Read-Only"] = "true"
+    response.headers["X-Read-Only"] = "false" if request.url.path.startswith("/v1/ops/") else "true"
     return response
 
 
@@ -78,7 +80,8 @@ async def github_error_handler(_request: Request, exc: GitHubApiError):
 
 
 @app.exception_handler(StarletteHTTPException)
-async def http_error_handler(_request: Request, exc: StarletteHTTPException):
+async def http_error_handler(request: Request, exc: StarletteHTTPException):
+    read_only = not request.url.path.startswith("/v1/ops/")
     if exc.status_code == 401:
         error = "unauthorized"
     elif exc.status_code == 404:
@@ -91,16 +94,17 @@ async def http_error_handler(_request: Request, exc: StarletteHTTPException):
         error = "request_rejected"
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": error, "detail": str(exc.detail), "read_only": True},
+        content={"error": error, "detail": str(exc.detail), "read_only": read_only},
     )
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_error_handler(_request: Request, exc: RequestValidationError):
+async def validation_error_handler(request: Request, exc: RequestValidationError):
     # Return only field/error type, not user-supplied values.
+    read_only = not request.url.path.startswith("/v1/ops/")
     return JSONResponse(
         status_code=422,
-        content={"error": "validation_error", "detail": "Invalid request parameters", "read_only": True},
+        content={"error": "validation_error", "detail": "Invalid request parameters", "read_only": read_only},
     )
 
 
@@ -113,11 +117,12 @@ async def state_mismatch_handler(_request: Request, exc: StateMismatchError):
 
 
 @app.exception_handler(Exception)
-async def unexpected_error_handler(_request: Request, exc: Exception):
+async def unexpected_error_handler(request: Request, exc: Exception):
     # Do not echo exceptions that could contain request context or credential fragments.
+    read_only = not request.url.path.startswith("/v1/ops/")
     return JSONResponse(
         status_code=500,
-        content={"error": "internal_error", "detail": "Unexpected internal error; no write action was attempted.", "read_only": True},
+        content={"error": "internal_error", "detail": "Unexpected internal error; operation outcome may require reconciliation." if not read_only else "Unexpected internal error; no write action was attempted.", "read_only": read_only},
     )
 
 
@@ -229,3 +234,6 @@ def custom_openapi():
 
 
 app.openapi = custom_openapi
+
+# Operational routes are isolated from the public read-only key and require X-Ops-Key.
+app.include_router(ops_router)
