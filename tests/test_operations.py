@@ -253,3 +253,92 @@ def test_failed_runner_retry_requires_explicit_review_reason(monkeypatch):
     assert allowed["decision"] == "DISPATCHED"
     assert allowed["action_taken"] is True
     assert writer.dispatch_calls == 1
+
+
+def test_correction_updates_existing_bridge_pr_without_creating_another():
+    branch_name = "bridge-fix-docs"
+    old_pr_head = "b" * 40
+    updated_head = "f" * 40
+    content = "Updated documentation\n"
+
+    class Read:
+        def get_repo(self, repository):
+            return {"default_branch": "main"}
+
+        def get_content_text(self, repository, path, ref):
+            if path == "qa/certification/README.md" and ref == "main":
+                return f"# Entry\n\n## Rama canónica activa\n`{BRANCH}`\n", "1" * 40
+            raise AssertionError((repository, path, ref))
+
+        def get_ref_sha(self, repository, branch):
+            assert branch == BRANCH
+            return HEAD
+
+        def get_content_json(self, repository, path, ref, *, allow_404=False):
+            if ref == BRANCH:
+                value = "canonical version"
+            elif ref == branch_name:
+                value = "previous bridge version"
+            else:
+                return None
+            encoded = base64.b64encode(value.encode()).decode()
+            return {"type": "file", "encoding": "base64", "content": encoded}
+
+    class Writer:
+        def __init__(self):
+            self.posts = []
+            self.patches = []
+
+        def get_json(self, path, *, params=None, allow_404=False):
+            if path.endswith("/pulls"):
+                return [{
+                    "number": 11,
+                    "state": "open",
+                    "head": {"ref": branch_name, "sha": old_pr_head},
+                    "base": {"ref": BRANCH},
+                    "html_url": "https://github.com/c2melendez/precision-lab-lite/pull/11",
+                }]
+            if path.endswith(f"/git/ref/heads/{branch_name}"):
+                return {"object": {"sha": old_pr_head}}
+            if path.endswith(f"/git/commits/{old_pr_head}"):
+                return {"tree": {"sha": "c" * 40}}
+            raise AssertionError(path)
+
+        def post_json(self, path, body, *, expected=(201,)):
+            self.posts.append(path)
+            if path.endswith("/git/blobs"):
+                return {"sha": "d" * 40}
+            if path.endswith("/git/trees"):
+                return {"sha": "e" * 40}
+            if path.endswith("/git/commits"):
+                return {"sha": updated_head}
+            raise AssertionError(path)
+
+        def patch_json(self, path, body, *, expected=(200,)):
+            self.patches.append((path, body))
+            return {"ref": path, "object": {"sha": body["sha"]}}
+
+    writer = Writer()
+    result = create_change_request(
+        Read(),
+        writer,
+        {
+            "repo": "lite",
+            "change_id": "fix-docs",
+            "expected_head_sha": HEAD,
+            "title": "Correct certification documentation",
+            "body": "Update this task PR",
+            "commit_message": None,
+            "draft": False,
+            "files": [{"path": "qa/certification/CURRENT_STATE.md", "content": content}],
+        },
+    )
+
+    assert result["decision"] == "PR_UPDATED"
+    assert result["action_taken"] is True
+    assert result["pull_request_number"] == 11
+    assert result["branch"] == branch_name
+    assert result["branch_head_sha"] == updated_head
+    assert not any(path.endswith("/pulls") for path in writer.posts)
+    assert len(writer.patches) == 1
+    assert writer.patches[0][0].endswith(f"/git/refs/heads/{branch_name}")
