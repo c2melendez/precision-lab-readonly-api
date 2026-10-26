@@ -87,6 +87,25 @@ def get_github_writer() -> Iterator[GitHubWriteClient]:
         client.close()
 
 
+def get_github_writer_optional() -> Iterator[GitHubWriteClient | None]:
+    """Allow read-only planner decisions without requiring the write token."""
+    settings = Settings.from_env()
+    if not settings.github_write_token:
+        yield None
+        return
+    try:
+        client = GitHubWriteClient(
+            token=settings.github_write_token,
+            timeout=settings.request_timeout_seconds,
+        )
+    except GitHubApiError as exc:
+        raise HTTPException(status_code=503, detail=exc.message) from exc
+    try:
+        yield client
+    finally:
+        client.close()
+
+
 @app.exception_handler(GitHubApiError)
 async def github_error_handler(request: Request, exc: GitHubApiError):
     status_code = exc.status_code if exc.status_code in (404, 409, 502, 503) else 502
@@ -251,7 +270,7 @@ def execute_gate(
         description="Required when retry_after_review=true; briefly record the diagnosed reason.",
     ),
     client: GitHubReadClient = Depends(get_github),
-    writer: GitHubWriteClient = Depends(get_github_writer),
+    writer: GitHubWriteClient | None = Depends(get_github_writer_optional),
 ):
     """Execute the planned gate, or retry a recorded failed attempt only with an explicit reviewed reason."""
     try:
