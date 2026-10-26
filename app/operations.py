@@ -175,9 +175,10 @@ def _create_change_request_unlocked(
         "per_page": 100,
     }
     existing_prs = write_client.get_json(f"repos/{repository}/pulls", params=query)
+    open_pr_list = existing_prs if isinstance(existing_prs, list) else []
     existing_pr = next(
         (
-            pr for pr in existing_prs if isinstance(existing_prs, list)
+            pr for pr in open_pr_list
             if pr.get("head", {}).get("ref") == branch_name
             and pr.get("base", {}).get("ref") == canonical_branch
         ),
