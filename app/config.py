@@ -19,6 +19,21 @@ MAX_RUNNER_RECORD_SCAN = 25
 FRESHNESS_SECONDS = 15 * 60
 
 
+DEFAULT_TIMEOUT_SECONDS = 15.0
+MAX_TIMEOUT_SECONDS = 60.0
+
+
+def _parse_timeout(raw: str | None) -> float:
+    """Parse GITHUB_TIMEOUT_SECONDS; fall back to the default on invalid or out-of-range input."""
+    try:
+        value = float((raw or "").strip())
+    except ValueError:
+        return DEFAULT_TIMEOUT_SECONDS
+    if not (0 < value <= MAX_TIMEOUT_SECONDS):  # also rejects nan/inf/negatives
+        return DEFAULT_TIMEOUT_SECONDS
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     github_token: str
@@ -30,5 +45,5 @@ class Settings:
         return cls(
             github_token=os.getenv("GITHUB_READ_TOKEN", "").strip(),
             service_api_key=os.getenv("SERVICE_API_KEY", "").strip(),
-            request_timeout_seconds=float(os.getenv("GITHUB_TIMEOUT_SECONDS", "15")),
+            request_timeout_seconds=_parse_timeout(os.getenv("GITHUB_TIMEOUT_SECONDS")),
         )

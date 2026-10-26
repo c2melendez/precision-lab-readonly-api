@@ -869,5 +869,5 @@ components:
       in: header
       name: X-API-Key
 servers:
-- url: https://REPLACE-WITH-READONLY-SERVICE-HOST
-  description: Replace the placeholder with the deployed Render service URL.
+- url: https://precision-lab-readonly-api.onrender.com
+  description: Deployed read-only API
