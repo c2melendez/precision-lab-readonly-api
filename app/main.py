@@ -80,7 +80,8 @@ async def github_error_handler(_request: Request, exc: GitHubApiError):
 
 
 @app.exception_handler(StarletteHTTPException)
-async def http_error_handler(_request: Request, exc: StarletteHTTPException):
+async def http_error_handler(request: Request, exc: StarletteHTTPException):
+    read_only = not request.url.path.startswith("/v1/ops/")
     if exc.status_code == 401:
         error = "unauthorized"
     elif exc.status_code == 404:
@@ -93,16 +94,17 @@ async def http_error_handler(_request: Request, exc: StarletteHTTPException):
         error = "request_rejected"
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": error, "detail": str(exc.detail), "read_only": True},
+        content={"error": error, "detail": str(exc.detail), "read_only": read_only},
     )
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_error_handler(_request: Request, exc: RequestValidationError):
+async def validation_error_handler(request: Request, exc: RequestValidationError):
     # Return only field/error type, not user-supplied values.
+    read_only = not request.url.path.startswith("/v1/ops/")
     return JSONResponse(
         status_code=422,
-        content={"error": "validation_error", "detail": "Invalid request parameters", "read_only": True},
+        content={"error": "validation_error", "detail": "Invalid request parameters", "read_only": read_only},
     )
 
 
@@ -115,11 +117,12 @@ async def state_mismatch_handler(_request: Request, exc: StateMismatchError):
 
 
 @app.exception_handler(Exception)
-async def unexpected_error_handler(_request: Request, exc: Exception):
+async def unexpected_error_handler(request: Request, exc: Exception):
     # Do not echo exceptions that could contain request context or credential fragments.
+    read_only = not request.url.path.startswith("/v1/ops/")
     return JSONResponse(
         status_code=500,
-        content={"error": "internal_error", "detail": "Unexpected internal error; no write action was attempted.", "read_only": True},
+        content={"error": "internal_error", "detail": "Unexpected internal error; operation outcome may require reconciliation." if not read_only else "Unexpected internal error; no write action was attempted.", "read_only": read_only},
     )
 
 
