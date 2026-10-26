@@ -223,28 +223,13 @@ def _create_change_request_unlocked(
             repository,
             branch_head,
             files,
-            payload.get("commit_message") or f"fix(bridge): update {requested_change_id}",
+            f"{payload.get('commit_message') or ('fix(bridge): update ' + requested_change_id)} (bridge {operation_id[:12]})",
         )
         # force=false and a compare of the observed head avoid overwriting a concurrent
         # commit. If the ref moved, GitHub rejects the non-fast-forward update.
         write_client.patch_json(
             f"repos/{repository}/git/refs/heads/{branch_name}",
             {"sha": commit_sha, "force": False},
-            expected=(200,),
-        )
-        body_base = payload.get("body")
-        if body_base is None:
-            body_base = existing_pr.get("body") or ""
-        audit = (
-            f"\n\nBridge update: change_id={requested_change_id}; operation_id={operation_id}; "
-            f"base={current_head}; files={', '.join(item['path'] for item in files)}."
-        )
-        body = str(body_base).rstrip()
-        if audit not in body:
-            body += audit
-        write_client.patch_json(
-            f"repos/{repository}/pulls/{pr_number}",
-            {"title": payload["title"], "body": body},
             expected=(200,),
         )
         return {
