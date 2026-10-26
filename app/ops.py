@@ -1,6 +1,7 @@
 """Authenticated, allowlisted dispatch to the certification runner.
 
-The router is intentionally separate from the public read-only API key.
+The router is separate from the public read-only API key. Real dispatch remains
+fail-closed unless both durable idempotency storage and rollout configuration exist.
 """
 from __future__ import annotations
 
@@ -12,6 +13,15 @@ from typing import Literal
 import httpx
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
+
+from .idempotency import (
+    IdempotencyConflict,
+    IdempotencyUnavailable,
+    digest_key,
+    digest_request,
+    reserve,
+    set_status,
+)
 
 router = APIRouter(prefix="/v1/ops", tags=["Operations"])
 REPOS = {"lite": "c2melendez/precision-lab-lite", "plus": "c2melendez/precision-lab-plus"}
@@ -41,7 +51,7 @@ def _auth(key: str | None) -> None:
 
 
 def _ensure_dispatch_enabled() -> None:
-    """Fail closed until durable idempotency and rollout checks are complete."""
+    """Fail closed until persistent storage and rollout checks are complete."""
     if os.getenv("OPS_DISPATCH_ENABLED", "").strip().lower() != "true":
         raise HTTPException(status_code=503, detail="Runner dispatch is disabled pending idempotency and rollout validation")
 
@@ -64,13 +74,55 @@ def _validate(body: DispatchRequest) -> None:
 async def dispatch(
     body: DispatchRequest,
     x_ops_key: str | None = Header(default=None, alias="X-Ops-Key"),
+    x_idempotency_key: str | None = Header(
+        default=None,
+        alias="X-Idempotency-Key",
+        min_length=16,
+        max_length=200,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    ),
 ):
     _auth(x_ops_key)
     _validate(body)
     _ensure_dispatch_enabled()
+    if not x_idempotency_key:
+        raise HTTPException(status_code=400, detail="X-Idempotency-Key is required")
     token = os.getenv("RUNNER_DISPATCH_TOKEN", "").strip()
     if not token:
         raise HTTPException(status_code=503, detail="Runner dispatch credential is not configured")
+    if not os.getenv("OPS_DATABASE_URL", "").strip():
+        raise HTTPException(status_code=503, detail="Operations idempotency storage is not configured")
+
+    payload = body.model_dump(mode="json")
+    try:
+        reservation = reserve(
+            key_sha256=digest_key(x_idempotency_key),
+            request_sha256=digest_request(payload),
+            repo=body.repo,
+            operation=body.operation,
+            dry_run=body.dry_run,
+        )
+    except IdempotencyConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except IdempotencyUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    operation_id = reservation["operation_id"]
+    if not reservation["created"]:
+        if reservation["status"] == "rejected":
+            raise HTTPException(status_code=409, detail="This idempotent operation was previously rejected; use a new key only for a new reviewed request")
+        return {
+            "status": "dispatch_accepted" if reservation["status"] == "accepted" else "dispatch_in_progress",
+            "operation_id": operation_id,
+            "repo": body.repo,
+            "operation": body.operation,
+            "dry_run": body.dry_run,
+            "workflow": WORKFLOW,
+            "completed": False,
+            "certification_pass": False,
+            "duplicate_request": True,
+        }
+
     repo = REPOS[body.repo]
     inputs = {
         "operation": body.operation,
@@ -95,17 +147,34 @@ async def dispatch(
                 json={"ref": "main", "inputs": inputs},
             )
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="GitHub Actions dispatch request failed") from exc
+        # Outcome may be ambiguous. Keep the durable reservation as dispatching
+        # to prevent an automatic retry from creating a second run.
+        raise HTTPException(status_code=502, detail=f"Dispatch outcome is uncertain; operation_id={operation_id}") from exc
+
     if response.status_code == 204:
+        try:
+            set_status(operation_id, "accepted")
+        except IdempotencyUnavailable as exc:
+            # The reservation remains durable as dispatching, which is safer than
+            # permitting a second dispatch after a database update failure.
+            raise HTTPException(status_code=503, detail=f"Dispatch accepted but status reconciliation is required; operation_id={operation_id}") from exc
         return {
             "status": "dispatch_accepted",
+            "operation_id": operation_id,
             "repo": body.repo,
             "operation": body.operation,
             "dry_run": body.dry_run,
             "workflow": WORKFLOW,
             "completed": False,
             "certification_pass": False,
+            "duplicate_request": False,
         }
-    if response.status_code in (401, 403, 404):
-        raise HTTPException(status_code=502, detail=f"GitHub rejected dispatch request (HTTP {response.status_code})")
-    raise HTTPException(status_code=502, detail=f"GitHub dispatch API returned HTTP {response.status_code}")
+
+    try:
+        set_status(operation_id, "rejected")
+    except IdempotencyUnavailable:
+        # Preserve fail-closed behavior; never issue a second dispatch for this key.
+        pass
+    if response.status_code in (400, 401, 403, 404, 422):
+        raise HTTPException(status_code=502, detail=f"GitHub rejected dispatch request (HTTP {response.status_code}); operation_id={operation_id}")
+    raise HTTPException(status_code=502, detail=f"GitHub dispatch API returned HTTP {response.status_code}; operation_id={operation_id}")
