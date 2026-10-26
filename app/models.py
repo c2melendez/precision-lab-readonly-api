@@ -12,7 +12,8 @@ class APIModel(BaseModel):
 class ErrorResponse(APIModel):
     error: str
     detail: str | None = None
-    read_only: Literal[True] = True
+    read_only: bool = True
+    mutation_attempted: bool = False
 
 
 class Blocker(APIModel):
@@ -168,3 +169,69 @@ class RunEvidenceResponse(APIModel):
     record_relation: Literal["self", "dispatched_by", "none"]
     interpretation_note: str
     served_at: str
+
+
+class ChangeFile(APIModel):
+    path: str = Field(min_length=1, max_length=240)
+    content: str = Field(max_length=300000)
+
+
+class ChangeRequest(APIModel):
+    repo: Literal["lite", "plus"]
+    expected_head_sha: str = Field(pattern=r"^[0-9a-fA-F]{40}$")
+    title: str = Field(min_length=8, max_length=120)
+    body: str = Field(default="", max_length=12000)
+    commit_message: str | None = Field(default=None, max_length=160)
+    draft: bool = False
+    files: list[ChangeFile] = Field(min_length=1, max_length=30)
+
+
+class ChangeOperationResponse(APIModel):
+    repo: Literal["lite", "plus"]
+    repository_full_name: str
+    decision: Literal["REUSE", "PR_CREATED", "PR_REUSED"]
+    action_taken: bool
+    canonical_branch: str
+    current_head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str | None = None
+    branch: str | None = None
+    branch_head_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    pull_request_number: int | None = None
+    pull_request_url: str | None = None
+    detail: str
+
+
+class GateExecutionResponse(APIModel):
+    repo: Literal["lite", "plus"]
+    repository_full_name: str
+    gate: str
+    canonical_branch: str
+    observed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    input_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    planner_decision: str
+    decision: Literal["RUN", "WAIT", "REUSE", "DIAGNOSE", "REVIEW", "REFRESH", "DISPATCHED"]
+    action_taken: bool
+    runner_run_id: str | None = Field(default=None, pattern=r"^[0-9]{1,20}$")
+    runner_run_url: str | None = None
+    prior_runner_run_id: str | None = None
+    detail: str
+    read_only: Literal[False] = False
+
+
+class MergeRequest(APIModel):
+    repo: Literal["lite", "plus"]
+    expected_head_sha: str = Field(pattern=r"^[0-9a-fA-F]{40}$")
+
+
+class MergeOperationResponse(APIModel):
+    repo: Literal["lite", "plus"]
+    repository_full_name: str
+    decision: Literal["MERGED", "ALREADY_MERGED"]
+    action_taken: bool
+    pull_request_number: int
+    pull_request_url: str | None = None
+    head_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    merge_commit_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    validated_check_runs: list[str] = Field(default_factory=list)
+    detail: str
+    read_only: Literal[False] = False
