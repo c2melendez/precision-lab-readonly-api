@@ -325,6 +325,7 @@ def merge_pull_request(
 # the same repository's runner. After restarts, the live Actions history and the
 # runner's committed result records provide the durable guard.
 import threading
+import time
 from datetime import datetime, timezone
 
 from .config import RUNNER_WORKFLOW_PATH
@@ -332,6 +333,8 @@ from .service import get_gate_plan, get_runner_records
 
 
 _GATE_LOCKS = {"lite": threading.Lock(), "plus": threading.Lock()}
+_RECENT_DISPATCHES: dict[tuple[str, str, str], float] = {}
+_DISPATCH_COOLDOWN_SECONDS = 120
 
 
 def execute_gate_request(
@@ -398,6 +401,15 @@ def execute_gate_request(
             })
             return base_response
 
+        dispatch_key = (alias, gate_name, str(plan["observed_head"]))
+        last_dispatch = _RECENT_DISPATCHES.get(dispatch_key)
+        if last_dispatch is not None and time.monotonic() - last_dispatch < _DISPATCH_COOLDOWN_SECONDS:
+            base_response.update({
+                "decision": "WAIT",
+                "detail": "A dispatch request for this gate and HEAD was just submitted; allow GitHub Actions to index it before retrying.",
+            })
+            return base_response
+
         # A previous runner request for this exact base/gate is not silently retried.
         # Inspect its result and diagnose before changing state or intentionally requesting
         # a new run; this protects against repeated dispatches after a partial failure.
@@ -421,6 +433,9 @@ def execute_gate_request(
             return base_response
 
         inputs = {"target_repo": alias, "gate": gate_name, "dry_run": "false"}
+        # Set the local idempotency window before issuing the network request. If the
+        # client times out after GitHub accepted the dispatch, a retry will be suppressed.
+        _RECENT_DISPATCHES[dispatch_key] = time.monotonic()
         write_client.dispatch_workflow(repository, RUNNER_WORKFLOW_PATH, branch, inputs)
         base_response.update({
             "decision": "DISPATCHED",
