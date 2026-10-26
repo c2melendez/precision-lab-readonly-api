@@ -14,6 +14,7 @@ from fastapi.security import APIKeyHeader
 from .config import Settings
 from .github_api import GitHubApiError, GitHubReadClient
 from .models import ErrorResponse, GatePlanResponse, RunEvidenceResponse, StatusResponse
+from .ops import router as ops_router
 from .service import (
     StateMismatchError,
     get_gate_plan,
@@ -43,7 +44,7 @@ async def read_only_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Read-Only"] = "true"
+    response.headers["X-Read-Only"] = "false" if request.url.path.startswith("/v1/ops/") else "true"
     return response
 
 
@@ -229,3 +230,6 @@ def custom_openapi():
 
 
 app.openapi = custom_openapi
+
+# Operational routes are isolated from the public read-only key and require X-Ops-Key.
+app.include_router(ops_router)
