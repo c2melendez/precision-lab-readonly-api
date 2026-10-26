@@ -1,6 +1,6 @@
 # Precision Lab — API de certificación de solo lectura
 
-**Estado:** implementación preparada y probada localmente; todavía no desplegada en Render.
+**Estado (corte 2026-10-26):** publicado en el repositorio privado y desplegado en Render. El deploy `dep-dbfil6uc6qcc739s3mng` terminó `live` sobre el commit `684a4c004889da7c9d252dac31eed48960d06ae8`. La validación funcional en vivo sigue pendiente: en el último corte, el servicio tenía `healthCheckPath` vacío y aún faltaban los secretos `GITHUB_READ_TOKEN` y `SERVICE_API_KEY` según el informe operativo.
 
 Servicio HTTP para que un GPT personalizado consulte el estado de Precision Lab Lite/Plus sin recibir credenciales de GitHub ni permisos para ejecutar operaciones. No se conecta a los productos como aplicación matemática y no modifica los repositorios.
 
