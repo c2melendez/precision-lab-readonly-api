@@ -300,3 +300,129 @@ def merge_pull_request(
         "validated_check_runs": check_names,
         "detail": "GitHub confirmed the merge after every check run on the exact PR head was complete and successful or explicitly skipped/neutral.",
     }
+
+
+# A single in-process lock prevents two simultaneous API requests from dispatching
+# the same repository's runner. After restarts, the live Actions history and the
+# runner's committed result records provide the durable guard.
+import threading
+from datetime import datetime, timezone
+
+from .config import RUNNER_WORKFLOW_PATH
+from .service import get_gate_plan, get_runner_records
+
+
+_GATE_LOCKS = {"lite": threading.Lock(), "plus": threading.Lock()}
+
+
+def execute_gate_request(
+    read_client: GitHubReadClient,
+    write_client: GitHubWriteClient,
+    alias: str,
+    gate_name: str,
+) -> dict[str, Any]:
+    """Dispatch a gate only when live planning explicitly says RUN.
+
+    All other planner decisions are returned without writing to GitHub. A PR-based
+    change operation is intentionally separate: PR checks should not be duplicated
+    by also dispatching the same gate manually.
+    """
+    if alias not in REPOSITORIES:
+        raise ValueError("repo must be lite or plus")
+
+    with _GATE_LOCKS[alias]:
+        plan = get_gate_plan(read_client, alias, gate_name)
+        gate_plan = plan["gate"]
+        decision = gate_plan["decision"]
+        base_response = {
+            "repo": alias,
+            "repository_full_name": plan["repository_full_name"],
+            "gate": gate_name,
+            "canonical_branch": plan["canonical_branch"],
+            "observed_head": plan["observed_head"],
+            "input_fingerprint": gate_plan.get("input_fingerprint"),
+            "planner_decision": decision,
+            "action_taken": False,
+            "runner_run_id": None,
+            "runner_run_url": None,
+        }
+
+        if plan["state_status"] != "CURRENT" or decision != "RUN":
+            base_response["decision"] = decision if plan["state_status"] == "CURRENT" else "REFRESH"
+            base_response["detail"] = gate_plan.get("reason") or plan.get("reconciliation_action") or (
+                "Planner decision is not RUN; no GitHub Actions workflow was dispatched."
+            )
+            return base_response
+
+        repository = REPOSITORIES[alias]
+        branch = plan["canonical_branch"]
+        runs, history_complete = read_client.get_workflow_runs(repository, RUNNER_WORKFLOW_PATH, branch)
+        if not history_complete:
+            base_response["decision"] = "REFRESH"
+            base_response["detail"] = "Runner workflow history is incomplete; refusing to risk a duplicate dispatch."
+            return base_response
+
+        active_statuses = {"queued", "in_progress", "requested", "waiting", "pending"}
+        active = [
+            run for run in runs
+            if run.get("event") == "workflow_dispatch" and run.get("status") in active_statuses
+            and run.get("head_branch") == branch
+        ]
+        if active:
+            latest = max(active, key=lambda run: str(run.get("created_at", "")))
+            run_id = str(latest.get("id", ""))
+            base_response.update({
+                "decision": "WAIT",
+                "runner_run_id": run_id if run_id.isdigit() else None,
+                "runner_run_url": f"https://github.com/{repository}/actions/runs/{run_id}" if run_id.isdigit() else None,
+                "detail": "A Certification Runner workflow is already active for this canonical branch; no second dispatch was sent.",
+            })
+            return base_response
+
+        # A previous runner request for this exact base/gate is not silently retried.
+        # Inspect its result and diagnose before changing state or intentionally requesting
+        # a new run; this protects against repeated dispatches after a partial failure.
+        records = get_runner_records(read_client, repository, branch, limit=15)
+        prior = [
+            record for record in records
+            if str(record.get("gate", "")) == gate_name
+            and str(record.get("base_sha", "")).lower() == str(plan["observed_head"]).lower()
+            and str(record.get("decision", "")).upper() in {"DISPATCHED", "NOT_DISPATCHED"}
+        ]
+        if prior:
+            latest = max(prior, key=lambda record: str(record.get("recorded_at", "")))
+            base_response.update({
+                "decision": "DIAGNOSE",
+                "detail": (
+                    "A prior runner record exists for the same gate and HEAD. Review its linked runner/child run before "
+                    "requesting any retry; this API will not repeat that operation automatically."
+                ),
+                "prior_runner_run_id": str(latest.get("runner_run_id", "")),
+            })
+            return base_response
+
+        inputs = {"target_repo": alias, "gate": gate_name, "dry_run": "false"}
+        write_client.dispatch_workflow(repository, RUNNER_WORKFLOW_PATH, branch, inputs)
+        base_response.update({
+            "decision": "DISPATCHED",
+            "action_taken": True,
+            "detail": (
+                "GitHub accepted the workflow_dispatch request. Query live runner/run evidence before interpreting it "
+                "as completed; dispatch acceptance is not a test PASS."
+            ),
+        })
+        # Resolve the run ID if the GitHub API has indexed it already. Failure to find it
+        # is reported as pending discovery, never treated as proof that no dispatch occurred.
+        refreshed, _complete = read_client.get_workflow_runs(repository, RUNNER_WORKFLOW_PATH, branch)
+        candidates = [
+            run for run in refreshed
+            if run.get("event") == "workflow_dispatch" and run.get("head_branch") == branch
+            and run.get("head_sha") == plan["observed_head"]
+        ]
+        if candidates:
+            latest = max(candidates, key=lambda run: str(run.get("created_at", "")))
+            run_id = str(latest.get("id", ""))
+            if run_id.isdigit():
+                base_response["runner_run_id"] = run_id
+                base_response["runner_run_url"] = f"https://github.com/{repository}/actions/runs/{run_id}"
+        return base_response
