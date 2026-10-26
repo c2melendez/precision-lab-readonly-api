@@ -61,6 +61,9 @@ async def dispatch(
 ):
     _auth(x_ops_key)
     _validate(body)
+    # Fail closed until durable idempotency and deployment checks are complete.
+    if os.getenv("OPS_DISPATCH_ENABLED", "").strip().lower() != "true":
+        raise HTTPException(status_code=503, detail="Runner dispatch is disabled pending idempotency and rollout validation")
     token = os.getenv("RUNNER_DISPATCH_TOKEN", "").strip()
     if not token:
         raise HTTPException(status_code=503, detail="Runner dispatch credential is not configured")
