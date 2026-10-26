@@ -1,8 +1,10 @@
 # Precision Lab — API de certificación de solo lectura
 
-**Estado actualizado (corte 2026-10-26 16:57 UTC):** el planificador v2 está desplegado en Render. El deploy actual `dep-dbfnu8nlk1mc73fksl6g` está `live` sobre el commit `b6d5efdcae0802d5b5a24c79d8d7373bfa9e1acd`. Los logs confirman que Uvicorn inició y la aplicación terminó su arranque.
+**Estado reconciliado (2026-10-26):** el planificador v2 está desplegado en Render. El deploy observado `dep-dbfnu8nlk1mc73fksl6g` está `live` sobre el commit `b6d5efdcae0802d5b5a24c79d8d7373bfa9e1acd`; los logs confirman el arranque de Uvicorn.
 
-**Configuración y prueba final aún pendientes:** Render sigue reportando `healthCheckPath` vacío aunque `render.yaml` declara `/healthz`. La presencia de `GITHUB_READ_TOKEN` y `SERVICE_API_KEY` no se pudo confirmar mediante los metadatos disponibles; no asumir que faltan ni revelar sus valores. No se completó en este corte una prueba autenticada de `/v1/status` o del planificador. `autoDeployTrigger` sigue desactivado, por lo que los futuros cambios requieren despliegue deliberado.
+**Prueba live autenticada:** el verificador `verify-live-api.ps1` pasó HTTPS, OpenAPI, rutas GET, esquema de API key, estado bilateral y el plan del gate con `action_taken=false`. La prueba observó entonces Lite r297 y Plus r311; desde entonces, los índices documentales avanzaron a Lite r301 y Plus r314. Por eso, el smoke test demuestra que la API respondió correctamente en ese corte, pero no sustituye una nueva lectura live para confirmar los números de revisión actuales. No se despachó ningún gate.
+
+**Pendiente de configuración de Render:** los metadatos aún muestran `healthCheckPath` vacío aunque `render.yaml` declara `/healthz`. El smoke test autenticado confirma que las credenciales funcionaban durante la prueba; no se publican ni se infieren sus valores. `autoDeployTrigger` sigue desactivado, por lo que futuros cambios de código requieren despliegue deliberado.
 
 Servicio HTTP para que un GPT personalizado consulte el estado de Precision Lab Lite/Plus sin recibir credenciales de GitHub ni permisos para ejecutar operaciones. No se conecta a los productos como aplicación matemática y no modifica los repositorios.
 
@@ -129,5 +131,5 @@ En el corte de 2026-10-26, Lite está en revisión documental r301 y Plus en r31
 
 - Pruebas automatizadas: ejecutar `python -m pytest -q` en el paquete; el conteo puede cambiar al añadir regresiones.
 - YAML de Render: sintaxis local comprobable; el CLI de Render no estaba instalado, por lo que no afirmo que se haya ejecutado `render blueprints validate` ni una validación de Blueprint con la API de Render.
-- En este seguimiento se verificó el deploy `dep-dbfnu8nlk1mc73fksl6g` (`live`) y los logs de arranque. No se ejecutaron gates nuevos de certificación para este seguimiento.
-- Queda pendiente validar en el Dashboard que `healthCheckPath=/healthz`, confirmar la configuración de los secretos sin exponer sus valores y ejecutar `verify-live-api.ps1` para comprobar los endpoints protegidos. Hasta completar esos pasos, la API no debe considerarse plenamente validada de extremo a extremo.
+- El deploy `dep-dbfnu8nlk1mc73fksl6g` (`live`) y los logs de arranque fueron verificados. El smoke test autenticado pasó en el corte anterior y confirmó `action_taken=false`; no ejecutó gates.
+- **Pendiente:** verificar en el Dashboard que `healthCheckPath=/healthz` esté aplicado. Repetir `verify-live-api.ps1` después de las actualizaciones documentales r301/r314 para registrar las revisiones live actuales. Hasta confirmar el health check en Render y actualizar esa lectura, distinguir “API operativa en la última prueba” de “configuración Render completamente conciliada”.
