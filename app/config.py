@@ -22,6 +22,7 @@ FRESHNESS_SECONDS = 15 * 60
 @dataclass(frozen=True)
 class Settings:
     github_token: str
+    github_write_token: str
     service_api_key: str
     request_timeout_seconds: float = 15.0
 
@@ -29,6 +30,7 @@ class Settings:
     def from_env(cls) -> "Settings":
         return cls(
             github_token=os.getenv("GITHUB_READ_TOKEN", "").strip(),
+            github_write_token=os.getenv("GITHUB_WRITE_TOKEN", "").strip(),
             service_api_key=os.getenv("SERVICE_API_KEY", "").strip(),
             request_timeout_seconds=float(os.getenv("GITHUB_TIMEOUT_SECONDS", "15")),
         )
