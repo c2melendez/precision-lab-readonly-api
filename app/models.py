@@ -177,8 +177,8 @@ class ChangeFile(APIModel):
 
 class ChangeRequest(APIModel):
     repo: Literal["lite", "plus"]
-    change_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$")
-    expected_head_sha: str = Field(pattern=r"^[0-9a-fA-F]{40}$")
+    change_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$", description="Stable identifier for one task. Reuse it for subsequent corrections to update the existing PR; use a new value for an independent task.")
+    expected_head_sha: str = Field(pattern=r"^[0-9a-fA-F]{40}$", description="Canonical branch HEAD observed immediately before composing this change. A stale SHA is rejected.")
     title: str = Field(min_length=8, max_length=120)
     body: str = Field(default="", max_length=12000)
     commit_message: str | None = Field(default=None, max_length=160)
