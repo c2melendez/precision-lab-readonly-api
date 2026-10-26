@@ -4,7 +4,9 @@
 
 **Configuración y prueba final aún pendientes:** Render sigue reportando `healthCheckPath` vacío aunque `render.yaml` declara `/healthz`. La presencia de `GITHUB_READ_TOKEN` y `SERVICE_API_KEY` no se pudo confirmar mediante los metadatos disponibles; no asumir que faltan ni revelar sus valores. No se completó en este corte una prueba autenticada de `/v1/status` o del planificador. `autoDeployTrigger` sigue desactivado, por lo que los futuros cambios requieren despliegue deliberado.
 
-Servicio HTTP para que un GPT personalizado consulte el estado de Precision Lab Lite/Plus sin recibir credenciales de GitHub ni permisos para ejecutar operaciones. No se conecta a los productos como aplicación matemática y no modifica los repositorios.
+Servicio HTTP de Bridge para que un GPT personalizado consulte evidencia y solicite operaciones de certificación sin recibir credenciales de GitHub. El GPT solo conoce `SERVICE_API_KEY`; los tokens de GitHub permanecen en el servidor. No se conecta a los productos como aplicación matemática.
+
+**Distinción de despliegue:** el servicio `live` todavía ejecuta el commit `b6d5efdcae0802d5b5a24c79d8d7373bfa9e1acd`, que es de solo lectura. Las rutas POST descritas aquí están en la rama `feature/bridge-authorized-operations-20261026`; no estarán disponibles en Render hasta completar la revisión, integrar el PR, configurar `GITHUB_WRITE_TOKEN` como secreto y desplegar manualmente.
 
 ## Rutas
 
@@ -16,7 +18,7 @@ Servicio HTTP para que un GPT personalizado consulte el estado de Precision Lab 
 | GET | `/v1/runs/{run_id}?repo=lite\|plus` | Evidencia bruta de Actions, jobs/pasos y registro del runner relacionado cuando puede encontrarse. |
 | GET | `/openapi.json` / `/openapi.yaml` | Especificación importable para GPT Actions. |
 
-La API acepta únicamente los alias `lite` y `plus`, no nombres de repositorio arbitrarios. Responde con `Cache-Control: no-store` y `X-Read-Only: true`. Todas las operaciones documentadas de la API de certificación son GET. `success` de GitHub Actions nunca se transforma automáticamente en `PASS`.
+La API acepta únicamente los alias `lite` y `plus`, no nombres de repositorio arbitrarios. Responde con `Cache-Control: no-store`; el indicador `X-Read-Only` distingue las rutas de lectura de los endpoints de operación. Los POST solo crean una rama/PR, solicitan el Runner con decisión `RUN`, o intentan una fusión explícitamente solicitada después de validar los checks. `success` de GitHub Actions nunca se transforma automáticamente en `PASS`.
 
 ## Seguridad requerida
 
@@ -28,7 +30,7 @@ Configura `GITHUB_READ_TOKEN` como un fine-grained token restringido a `c2melend
 - Repository permissions: **Actions: Read**.
 - Metadata: Read (permiso de lectura estándar del repositorio).
 
-No uses el PAT de escritura `GH_TOKEN` del Certification Runner. La API no contiene métodos para enviar solicitudes POST/PATCH/PUT/DELETE a GitHub. El cliente `GitHubReadClient` solo implementa GET.
+No coloques el PAT dentro del prompt ni en la Action del GPT. `GITHUB_READ_TOKEN` permanece restringido a Contents: Read, Actions: Read y Metadata: Read. Para las nuevas rutas de operación, configura un secreto independiente `GITHUB_WRITE_TOKEN`, restringido a los dos repositorios y con Contents: Write, Pull requests: Write, Actions: Write, Workflows: Write y Metadata: Read. El token de escritura queda en Render y nunca se devuelve en respuestas. El `GH_TOKEN` del Runner sigue siendo un secreto separado del workflow; GitHub no lo transfiere automáticamente a Render.
 
 ### GPT Action
 
@@ -74,10 +76,10 @@ Este directorio debe publicarse como un repositorio independiente. **No agregues
 2. Extrae el paquete, abre PowerShell en la raíz `precision-lab-readonly-api` y ejecuta `./scripts/publish-private-repo.ps1`. El script lista los archivos, rechaza archivos secretos/cachés, pide escribir `PUBLISH`, crea el repositorio como **Private** solo si no existe y nunca fuerza un push. Si el repositorio ya existe y es público, se detiene.
 3. Confirma en GitHub que `c2melendez/precision-lab-readonly-api` es privado y que `main` contiene el código publicado. Si el push se rechaza por historial remoto preexistente, no hagas force-push: reconcilia el historial primero.
 4. En Render, crea un Blueprint desde ese repositorio y revisa el recurso antes de aplicar. El `render.yaml` está en la raíz y tiene `autoDeployTrigger: off`.
-5. Introduce `GITHUB_READ_TOKEN` y `SERVICE_API_KEY` como secretos en Render; nunca los guardes en Git. El token de GitHub debe tener solo Contents: Read y Actions: Read en los dos repositorios de Precision Lab.
+5. Introduce `GITHUB_READ_TOKEN`, `SERVICE_API_KEY` y, para las rutas POST de Bridge, `GITHUB_WRITE_TOKEN` como secretos en Render; nunca los guardes en Git. El token de lectura requiere Contents: Read y Actions: Read. El token de escritura requiere Contents: Write, Pull requests: Write, Actions: Write, Workflows: Write y Metadata: Read, restringido a Lite/Plus.
 6. En Render → **Settings → Health Checks**, configura `/healthz` y confirma que el ajuste del servicio deje de reportar `healthCheckPath` vacío. El archivo `render.yaml` ya declara esa ruta, pero el ajuste observado en el Dashboard todavía no la reflejaba.
 7. Confirma que `PUBLIC_BASE_URL=https://precision-lab-readonly-api.onrender.com` corresponda al host público. El `render.yaml` actual ya contiene ese valor. Si cambias configuración, realiza el despliegue manual correspondiente porque `autoDeployTrigger: off`.
-8. En Windows PowerShell 5.1, ejecuta `./scripts/verify-live-api.ps1 -BaseUrl "https://precision-lab-readonly-api.onrender.com"`. El verificador pide `SERVICE_API_KEY` con entrada oculta y comprueba HTTPS, URL de OpenAPI, métodos GET, estado bilateral y que el planificador indique `action_taken=false`. Solo realiza peticiones GET; no despacha gates. La prueba aún debe ejecutarse después de confirmar secretos y health check.
+8. En Windows PowerShell 5.1, ejecuta `./scripts/verify-live-api.ps1 -BaseUrl "https://precision-lab-readonly-api.onrender.com"`. El verificador pide `SERVICE_API_KEY` con entrada oculta y comprueba HTTPS, URL de OpenAPI, allowlist de métodos/rutas, estado bilateral y que el planificador indique `action_taken=false`. No realiza ninguna operación de escritura ni despacha gates. La prueba aún debe ejecutarse después de confirmar secretos y health check.
 9. Descarga `https://precision-lab-readonly-api.onrender.com/openapi.yaml`, verifica que `servers[0].url` corresponda exactamente al host y luego impórtalo como Action en el GPT. Configura `X-API-Key` en la autenticación de la Action.
 10. Revisa que las advertencias de `/v1/status` se clasifiquen correctamente antes de interpretar el estado.
 
