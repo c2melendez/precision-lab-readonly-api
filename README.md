@@ -1,6 +1,8 @@
 # Precision Lab — API de certificación de solo lectura
 
-**Estado (corte 2026-10-26):** publicado en el repositorio privado y desplegado en Render. El deploy `dep-dbfil6uc6qcc739s3mng` terminó `live` sobre el commit `684a4c004889da7c9d252dac31eed48960d06ae8`. La validación funcional en vivo sigue pendiente: en el último corte, el servicio tenía `healthCheckPath` vacío y aún faltaban los secretos `GITHUB_READ_TOKEN` y `SERVICE_API_KEY` según el informe operativo.
+**Estado actualizado (corte 2026-10-26 16:57 UTC):** el planificador v2 está desplegado en Render. El deploy actual `dep-dbfnu8nlk1mc73fksl6g` está `live` sobre el commit `b6d5efdcae0802d5b5a24c79d8d7373bfa9e1acd`. Los logs confirman que Uvicorn inició y la aplicación terminó su arranque.
+
+**Configuración y prueba final aún pendientes:** Render sigue reportando `healthCheckPath` vacío aunque `render.yaml` declara `/healthz`. La presencia de `GITHUB_READ_TOKEN` y `SERVICE_API_KEY` no se pudo confirmar mediante los metadatos disponibles; no asumir que faltan ni revelar sus valores. No se completó en este corte una prueba autenticada de `/v1/status` o del planificador. `autoDeployTrigger` sigue desactivado, por lo que los futuros cambios requieren despliegue deliberado.
 
 Servicio HTTP para que un GPT personalizado consulte el estado de Precision Lab Lite/Plus sin recibir credenciales de GitHub ni permisos para ejecutar operaciones. No se conecta a los productos como aplicación matemática y no modifica los repositorios.
 
@@ -73,10 +75,10 @@ Este directorio debe publicarse como un repositorio independiente. **No agregues
 3. Confirma en GitHub que `c2melendez/precision-lab-readonly-api` es privado y que `main` contiene el código publicado. Si el push se rechaza por historial remoto preexistente, no hagas force-push: reconcilia el historial primero.
 4. En Render, crea un Blueprint desde ese repositorio y revisa el recurso antes de aplicar. El `render.yaml` está en la raíz y tiene `autoDeployTrigger: off`.
 5. Introduce `GITHUB_READ_TOKEN` y `SERVICE_API_KEY` como secretos en Render; nunca los guardes en Git. El token de GitHub debe tener solo Contents: Read y Actions: Read en los dos repositorios de Precision Lab.
-6. Verifica el despliegue y `GET /healthz`.
-7. Cuando Render asigne la URL real, configura `PUBLIC_BASE_URL=https://<host-real>.onrender.com` y aplica el cambio. La especificación OpenAPI seguirá usando un marcador hasta conocer la URL real.
-8. En Windows PowerShell 5.1, ejecuta `./scripts/verify-live-api.ps1 -BaseUrl https://<host-real>.onrender.com`. El verificador pide `SERVICE_API_KEY` con entrada oculta y comprueba HTTPS, URL de OpenAPI, métodos GET, estado bilateral y que el planificador indique `action_taken=false`. Solo realiza peticiones GET; no despacha gates.
-9. Descarga `https://<host-real>.onrender.com/openapi.yaml`, verifica que `servers[0].url` corresponda exactamente al host y luego impórtalo como Action en el GPT. Configura `X-API-Key` en la autenticación de la Action.
+6. En Render → **Settings → Health Checks**, configura `/healthz` y confirma que el ajuste del servicio deje de reportar `healthCheckPath` vacío. El archivo `render.yaml` ya declara esa ruta, pero el ajuste observado en el Dashboard todavía no la reflejaba.
+7. Confirma que `PUBLIC_BASE_URL=https://precision-lab-readonly-api.onrender.com` corresponda al host público. El `render.yaml` actual ya contiene ese valor. Si cambias configuración, realiza el despliegue manual correspondiente porque `autoDeployTrigger: off`.
+8. En Windows PowerShell 5.1, ejecuta `./scripts/verify-live-api.ps1 -BaseUrl "https://precision-lab-readonly-api.onrender.com"`. El verificador pide `SERVICE_API_KEY` con entrada oculta y comprueba HTTPS, URL de OpenAPI, métodos GET, estado bilateral y que el planificador indique `action_taken=false`. Solo realiza peticiones GET; no despacha gates. La prueba aún debe ejecutarse después de confirmar secretos y health check.
+9. Descarga `https://precision-lab-readonly-api.onrender.com/openapi.yaml`, verifica que `servers[0].url` corresponda exactamente al host y luego impórtalo como Action en el GPT. Configura `X-API-Key` en la autenticación de la Action.
 10. Revisa que las advertencias de `/v1/status` se clasifiquen correctamente antes de interpretar el estado.
 
 El Blueprint utiliza el plan `free`, que puede suspender servicios tras inactividad y añadir latencia de arranque. Cambiar de plan requiere una decisión de coste separada. `autoDeployTrigger: off` evita que cada commit futuro se despliegue automáticamente; los despliegues deben iniciarse de forma deliberada.
@@ -90,12 +92,42 @@ El Blueprint utiliza el plan `free`, que puede suspender servicios tras inactivi
 - `technical_baseline_sha` se contrasta con el HEAD vivo. Si el árbol técnico difiere o no se puede obtener el objeto baseline, se suprime `next_action` y el resultado es `RECONCILE` o `REFRESH`.
 - El servicio no es un oráculo de certificación. `REUSE` significa evidencia reutilizable según el planificador, no una ejecución nueva ni cierre global.
 
-## Hallazgo de continuidad: `[skip ci]`
+## Huella de continuidad, registros del runner y filtros de Actions
 
-La versión v3 del runner en `main` declara que los commits documentales no deben usar `[skip ci]`, pero los registros documentales r294/r295 y r307/r308 incluyen esa marca en el asunto de commit. El endpoint `/v1/status` emite una advertencia cuando la detecta. No se cambia el historial ni se altera el runner desde este servicio. Antes de concluir que los filtros `paths-ignore` por sí solos evitaron gates, inspecciona los triggers de los workflows y documenta/corrige el contrato en la rama correspondiente.
+La corrección de huella ya está implementada tanto en la API como en los planificadores canónicos Lite y Plus:
+
+- El planificador utiliza versión de huella `2` y excluye únicamente los archivos de registro generados con el patrón exacto `qa/certification/runner/[ID-numérico].json`. Estos archivos se escriben después de una corrida y no deben invalidar la misma evidencia que documentan.
+- La exclusión es deliberadamente estrecha. Los esquemas y archivos no numéricos del directorio `runner/`, los tests, workflows, dependencias, fixtures y contratos de certificación continúan siendo entradas de huella.
+- Las pruebas del planificador de la API comprueban tanto que el cambio de un registro numérico no invalida la huella, como que un archivo no numérico o un contrato de certificación sí la cambia.
+
+### Validación bilateral registrada
+
+Los índices canónicos registran la reparación como `VERIFIED_BILATERAL`, con los siguientes resultados exactos por SHA:
+
+| Repositorio | Gate | Run | SHA validado |
+|---|---|---|---|
+| Lite | Cumulative | [40359884483](https://github.com/c2melendez/precision-lab-lite/actions/runs/40359884483) — SUCCESS | `8c2cd395752959dbdc70cdf4e262d7bf8c597b82` |
+| Lite | H1d | [40359884531](https://github.com/c2melendez/precision-lab-lite/actions/runs/40359884531) — SUCCESS | `8c2cd395752959dbdc70cdf4e262d7bf8c597b82` |
+| Lite | Runner | [40359884623](https://github.com/c2melendez/precision-lab-lite/actions/runs/40359884623) — SUCCESS | `8c2cd395752959dbdc70cdf4e262d7bf8c597b82` |
+| Plus | Cumulative | [40360048532](https://github.com/c2melendez/precision-lab-plus/actions/runs/40360048532) — SUCCESS | `676f36ed2ca9566f5b37d27dd4c4f43065133f82` |
+| Plus | H1d | [40360048942](https://github.com/c2melendez/precision-lab-plus/actions/runs/40360048942) — SUCCESS | `676f36ed2ca9566f5b37d27dd4c4f43065133f82` |
+| Plus | Runner | [40360048710](https://github.com/c2melendez/precision-lab-plus/actions/runs/40360048710) — SUCCESS | `676f36ed2ca9566f5b37d27dd4c4f43065133f82` |
+
+Estos runs validan la corrección de continuidad; no son evidencia de un cierre global ni justifican repetir los mismos gates.
+
+### Commits documentales y `[skip ci]`
+
+- La versión actual del runner registra resultados sin añadir `[skip ci]` al asunto del commit; se apoya en los filtros de rutas configurados para evitar ciclos de ejecución causados por archivos generados.
+- Los commits históricos con `[skip ci]` se conservan sin reescritura. Para cada cambio documental futuro, revisar el `on.push` y los filtros de rutas del workflow afectado; los documentos contractuales que figuran como rutas de activación pueden necesitar validación aunque otros archivos Markdown se ignoren.
+- El endpoint `/v1/status` alerta cuando identifica la marca en commits asociados a rutas que son entradas del gate. Una advertencia por sí sola no demuestra si se omitió una corrida; la conclusión debe basarse en los triggers y el historial real de Actions.
+
+### Estado de certificación y siguiente objetivo
+
+En el corte de 2026-10-26, Lite está en revisión documental r301 y Plus en r314. Ambos conservan `global_certification: OPEN`. El siguiente objetivo canónico es `H2-EN-SG-CASE-EVIDENCE-AUDIT-R314`: construir en Plus la matriz de evidencia por caso EN-SG-01..32 y confirmar cobertura existente antes de añadir pruebas. No repetir las corridas verdes de la reparación de continuidad. Los bloqueos S25, Algebra 229, EDCX-B5 y SY-X-04-PLUS-HTTP siguen según los estados del índice; SG28 distribuido permanece `OUT_OF_SCOPE_SINGLE_HOST`, que no equivale a PASS.
 
 ## Verificaciones locales realizadas
 
 - Pruebas automatizadas: ejecutar `python -m pytest -q` en el paquete; el conteo puede cambiar al añadir regresiones.
 - YAML de Render: sintaxis local comprobable; el CLI de Render no estaba instalado, por lo que no afirmo que se haya ejecutado `render blueprints validate` ni una validación de Blueprint con la API de Render.
-- No se han ejecutado gates de certificación ni se ha modificado GitHub/Render desde este paquete.
+- En este seguimiento se verificó el deploy `dep-dbfnu8nlk1mc73fksl6g` (`live`) y los logs de arranque. No se ejecutaron gates nuevos de certificación para este seguimiento.
+- Queda pendiente validar en el Dashboard que `healthCheckPath=/healthz`, confirmar la configuración de los secretos sin exponer sus valores y ejecutar `verify-live-api.ps1` para comprobar los endpoints protegidos. Hasta completar esos pasos, la API no debe considerarse plenamente validada de extremo a extremo.
