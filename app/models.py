@@ -13,7 +13,6 @@ class ErrorResponse(APIModel):
     error: str
     detail: str | None = None
     read_only: bool = True
-    mutation_attempted: bool = False
 
 
 class Blocker(APIModel):
