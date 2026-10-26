@@ -3,6 +3,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 

@@ -211,7 +211,7 @@ def get_repo_status(client: GitHubReadClient, alias: str, pointers: dict[str, st
             if isinstance(path, str)
             and path not in prose_only_paths
             and path != CONTINUITY_PATH
-            and not re.fullmatch(r"qa/certification/runner/[0-9]{1,20}\\.json", path)
+            and not re.fullmatch(r"qa/certification/runner/[0-9]{1,20}\.json", path)
         ]
         if has_skip_marker and gate_input_paths:
             shown = ", ".join(gate_input_paths[:5])
