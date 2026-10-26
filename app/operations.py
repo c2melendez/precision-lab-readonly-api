@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import re
+import threading
 from typing import Any
 
 from .config import REPOSITORIES
@@ -437,7 +438,6 @@ def merge_pull_request(
 # A single in-process lock prevents two simultaneous API requests from dispatching
 # the same repository's runner. After restarts, the live Actions history and the
 # runner's committed result records provide the durable guard.
-import threading
 import time
 from datetime import datetime, timezone
 
