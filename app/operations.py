@@ -62,28 +62,95 @@ def _decode_content(payload: dict[str, Any] | None) -> str | None:
         return None
 
 
+def _same_files_on_ref(read_client: GitHubReadClient, repository: str, ref: str, files: list[dict[str, str]]) -> bool:
+    for item in files:
+        remote = read_client.get_content_json(repository, item["path"], ref, allow_404=True)
+        if _decode_content(remote) != item["content"]:
+            return False
+    return True
+
+
+def _create_git_commit(
+    write_client: GitHubWriteClient,
+    repository: str,
+    parent_sha: str,
+    files: list[dict[str, str]],
+    message: str,
+) -> str:
+    parent_commit = write_client.get_json(f"repos/{repository}/git/commits/{parent_sha}")
+    base_tree_sha = parent_commit.get("tree", {}).get("sha")
+    if not isinstance(base_tree_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", base_tree_sha):
+        raise GitHubApiError(502, "GitHub returned an invalid base tree SHA")
+
+    entries = []
+    for item in files:
+        blob = write_client.post_json(
+            f"repos/{repository}/git/blobs",
+            {"content": item["content"], "encoding": "utf-8"},
+        )
+        blob_sha = blob.get("sha")
+        if not isinstance(blob_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", blob_sha):
+            raise GitHubApiError(502, f"GitHub did not return a valid blob SHA for {item['path']}")
+        entries.append({"path": item["path"], "mode": "100644", "type": "blob", "sha": blob_sha})
+
+    tree = write_client.post_json(
+        f"repos/{repository}/git/trees",
+        {"base_tree": base_tree_sha, "tree": entries},
+    )
+    tree_sha = tree.get("sha")
+    if not isinstance(tree_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", tree_sha):
+        raise GitHubApiError(502, "GitHub did not return a valid change tree SHA")
+    commit = write_client.post_json(
+        f"repos/{repository}/git/commits",
+        {"message": message, "tree": tree_sha, "parents": [parent_sha]},
+    )
+    commit_sha = commit.get("sha")
+    if not isinstance(commit_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", commit_sha):
+        raise GitHubApiError(502, "GitHub did not return a valid change commit SHA")
+    return commit_sha
+
+
 def _create_change_request_unlocked(
     read_client: GitHubReadClient,
     write_client: GitHubWriteClient,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    """Create one branch + PR. Never pushes to the canonical branch or dispatches gates."""
-    alias = payload["repo"]
+    """Create a PR or update the same task PR; never writes to the canonical branch."""
+    alias = payload.get("repo")
+    if alias not in REPOSITORIES:
+        raise ValueError("repo must be lite or plus")
     repository = REPOSITORIES[alias]
     files = sorted(payload["files"], key=lambda item: item["path"])
     validate_change_paths(files)
+
+    fingerprint_input = {
+        "repo": alias,
+        "files": [
+            {
+                "path": item["path"],
+                "content_sha256": hashlib.sha256(item["content"].encode("utf-8")).hexdigest(),
+            }
+            for item in files
+        ],
+    }
+    operation_id = hashlib.sha256(
+        json.dumps(fingerprint_input, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+    requested_change_id = payload.get("change_id")
+    if requested_change_id is None:
+        slug = re.sub(r"[^A-Za-z0-9._-]+", "-", str(payload.get("title", "")).strip()).strip("-._").lower()
+        requested_change_id = slug[:40] or f"auto-{operation_id[:16]}"
+    if not isinstance(requested_change_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,47}", requested_change_id):
+        raise ValueError("change_id must start with a letter/number and contain only letters, numbers, dot, underscore, or hyphen (max 48 characters)")
+    branch_name = f"bridge-{requested_change_id}"
+
     pointers, _defaults = resolve_canonical_branches(read_client)
     canonical_branch = pointers[alias]
     current_head = read_client.get_ref_sha(repository, canonical_branch)
 
-    # Reuse already-integrated content even when the request's original base SHA is stale.
-    unchanged = True
-    for item in files:
-        existing = read_client.get_content_json(repository, item["path"], canonical_branch, allow_404=True)
-        if _decode_content(existing) != item["content"]:
-            unchanged = False
-            break
-    if unchanged:
+    # Reusing already-integrated content takes precedence over any attempt to create a branch.
+    if _same_files_on_ref(read_client, repository, canonical_branch, files):
         return {
             "repo": alias,
             "repository_full_name": repository,
@@ -91,32 +158,43 @@ def _create_change_request_unlocked(
             "action_taken": False,
             "canonical_branch": canonical_branch,
             "current_head_sha": current_head,
-            "operation_id": None,
+            "operation_id": operation_id,
+            "change_id": requested_change_id,
             "branch": None,
             "pull_request_number": None,
             "pull_request_url": None,
-            "detail": "Every requested file already matches the canonical branch; no branch, PR, or Actions run was created.",
+            "detail": "Every requested file already matches the canonical branch; no branch, PR, commit, or Actions run was created.",
         }
 
-    # Fingerprint the requested patch, not the base SHA. If a client retries after
-    # reconciling HEAD, the same patch reuses the already-open PR rather than
-    # creating another branch and triggering another set of Actions.
-    fingerprint_input = {
-        "repo": alias,
-        "files": [{"path": item["path"], "content_sha256": hashlib.sha256(item["content"].encode("utf-8")).hexdigest()} for item in files],
+    # The stable change_id selects the task PR. Later corrections with the same ID update
+    # its head, so PR checks re-run once on the new code instead of creating another PR.
+    query = {
+        "state": "open",
+        "head": f"c2melendez:{branch_name}",
+        "base": canonical_branch,
+        "per_page": 100,
     }
-    operation_id = hashlib.sha256(
-        json.dumps(fingerprint_input, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
-    branch_name = f"bridge-{operation_id[:20]}"
-
-    # A retry after a network timeout must return the existing PR rather than create another.
-    existing_prs = write_client.get_json(
-        f"repos/{repository}/pulls",
-        params={"state": "open", "head": f"c2melendez:{branch_name}", "base": canonical_branch, "per_page": 100},
+    existing_prs = write_client.get_json(f"repos/{repository}/pulls", params=query)
+    existing_pr = next(
+        (
+            pr for pr in existing_prs if isinstance(existing_prs, list)
+            if pr.get("head", {}).get("ref") == branch_name
+            and pr.get("base", {}).get("ref") == canonical_branch
+        ),
+        None,
     )
-    for pr in existing_prs if isinstance(existing_prs, list) else []:
-        if pr.get("head", {}).get("ref") == branch_name and pr.get("base", {}).get("ref") == canonical_branch:
+
+    if existing_pr is not None:
+        pr_number = int(existing_pr["number"])
+        branch_ref = write_client.get_json(
+            f"repos/{repository}/git/ref/heads/{branch_name}", allow_404=True
+        )
+        branch_head = str(branch_ref.get("object", {}).get("sha", "")) if isinstance(branch_ref, dict) else ""
+        recorded_pr_head = str(existing_pr.get("head", {}).get("sha", ""))
+        if not re.fullmatch(r"[0-9a-f]{40}", branch_head) or branch_head != recorded_pr_head:
+            raise StateMismatchError("The bridge PR branch moved during reconciliation; refresh the PR head before updating it.")
+
+        if _same_files_on_ref(read_client, repository, branch_name, files):
             return {
                 "repo": alias,
                 "repository_full_name": repository,
@@ -125,76 +203,120 @@ def _create_change_request_unlocked(
                 "canonical_branch": canonical_branch,
                 "current_head_sha": current_head,
                 "operation_id": operation_id,
+                "change_id": requested_change_id,
                 "branch": branch_name,
-                "pull_request_number": int(pr["number"]),
-                "pull_request_url": pr.get("html_url"),
-                "detail": "An open PR for this exact content fingerprint already exists; no new Actions run was requested by the API.",
+                "branch_head_sha": branch_head,
+                "pull_request_number": pr_number,
+                "pull_request_url": existing_pr.get("html_url"),
+                "detail": "The same task PR already contains the requested file contents; no commit or duplicate Actions run was created.",
             }
+
+        if payload["expected_head_sha"].lower() != current_head.lower():
+            raise StateMismatchError(
+                f"Stale change base: expected {payload['expected_head_sha']}, observed canonical HEAD {current_head}. "
+                "Refresh current state before updating the existing PR."
+            )
+
+        commit_sha = _create_git_commit(
+            write_client,
+            repository,
+            branch_head,
+            files,
+            payload.get("commit_message") or f"fix(bridge): update {requested_change_id}",
+        )
+        # force=false and a compare of the observed head avoid overwriting a concurrent
+        # commit. If the ref moved, GitHub rejects the non-fast-forward update.
+        write_client.patch_json(
+            f"repos/{repository}/git/refs/heads/{branch_name}",
+            {"sha": commit_sha, "force": False},
+            expected=(200,),
+        )
+        body_base = payload.get("body")
+        if body_base is None:
+            body_base = existing_pr.get("body") or ""
+        audit = (
+            f"\n\nBridge update: change_id={requested_change_id}; operation_id={operation_id}; "
+            f"base={current_head}; files={', '.join(item['path'] for item in files)}."
+        )
+        body = str(body_base).rstrip()
+        if audit not in body:
+            body += audit
+        write_client.patch_json(
+            f"repos/{repository}/pulls/{pr_number}",
+            {"title": payload["title"], "body": body},
+            expected=(200,),
+        )
+        return {
+            "repo": alias,
+            "repository_full_name": repository,
+            "decision": "PR_UPDATED",
+            "action_taken": True,
+            "canonical_branch": canonical_branch,
+            "current_head_sha": current_head,
+            "operation_id": operation_id,
+            "change_id": requested_change_id,
+            "branch": branch_name,
+            "branch_head_sha": commit_sha,
+            "pull_request_number": pr_number,
+            "pull_request_url": existing_pr.get("html_url"),
+            "detail": "Updated the existing task PR with one new commit; its pull_request checks must validate the new head. No duplicate PR was created.",
+        }
 
     if payload["expected_head_sha"].lower() != current_head.lower():
         raise StateMismatchError(
             f"Stale change base: expected {payload['expected_head_sha']}, observed canonical HEAD {current_head}. "
-            "Refresh the repository state and regenerate the patch."
+            "Refresh current state and regenerate the patch."
         )
 
-    # If a prior attempt created the branch but failed before opening the PR, finish that
-    # exact operation instead of creating a second branch/commit.
-    branch_ref = write_client.get_json(
-        f"repos/{repository}/git/ref/heads/{branch_name}", allow_404=True
+    historical_prs = write_client.get_json(
+        f"repos/{repository}/pulls",
+        params={"state": "all", "head": f"c2melendez:{branch_name}", "base": canonical_branch, "per_page": 100},
     )
+    if any(pr.get("head", {}).get("ref") == branch_name for pr in historical_prs if isinstance(historical_prs, list)):
+        raise StateMismatchError(
+            f"change_id {requested_change_id!r} already belongs to a closed PR; choose a new change_id for this new task."
+        )
+
+    branch_ref = write_client.get_json(f"repos/{repository}/git/ref/heads/{branch_name}", allow_404=True)
     if branch_ref is None:
-        base_commit = write_client.get_json(f"repos/{repository}/git/commits/{current_head}")
-        base_tree_sha = base_commit.get("tree", {}).get("sha")
-        if not isinstance(base_tree_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", base_tree_sha):
-            raise GitHubApiError(502, "GitHub returned an invalid base tree SHA")
-
-        tree_entries = []
-        for item in files:
-            blob = write_client.post_json(
-                f"repos/{repository}/git/blobs",
-                {"content": item["content"], "encoding": "utf-8"},
-            )
-            blob_sha = blob.get("sha")
-            if not isinstance(blob_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", blob_sha):
-                raise GitHubApiError(502, f"GitHub did not return a valid blob SHA for {item['path']}")
-            tree_entries.append({"path": item["path"], "mode": "100644", "type": "blob", "sha": blob_sha})
-
-        tree = write_client.post_json(
-            f"repos/{repository}/git/trees",
-            {"base_tree": base_tree_sha, "tree": tree_entries},
+        branch_head = _create_git_commit(
+            write_client,
+            repository,
+            current_head,
+            files,
+            payload.get("commit_message") or f"chore(bridge): {payload['title']}",
         )
-        tree_sha = tree.get("sha")
-        if not isinstance(tree_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", tree_sha):
-            raise GitHubApiError(502, "GitHub did not return a valid change tree SHA")
-        commit = write_client.post_json(
-            f"repos/{repository}/git/commits",
-            {
-                "message": payload.get("commit_message") or f"chore(bridge): {payload['title']}",
-                "tree": tree_sha,
-                "parents": [current_head],
-            },
-        )
-        commit_sha = commit.get("sha")
-        if not isinstance(commit_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", commit_sha):
-            raise GitHubApiError(502, "GitHub did not return a valid change commit SHA")
         write_client.post_json(
             f"repos/{repository}/git/refs",
-            {"ref": f"refs/heads/{branch_name}", "sha": commit_sha},
+            {"ref": f"refs/heads/{branch_name}", "sha": branch_head},
         )
-        branch_head = commit_sha
     else:
         branch_head = str(branch_ref.get("object", {}).get("sha", ""))
         if not re.fullmatch(r"[0-9a-f]{40}", branch_head):
             raise GitHubApiError(502, "An existing bridge branch has an invalid HEAD SHA")
+        if not _same_files_on_ref(read_client, repository, branch_name, files):
+            new_head = _create_git_commit(
+                write_client,
+                repository,
+                branch_head,
+                files,
+                payload.get("commit_message") or f"chore(bridge): recover {payload['title']}",
+            )
+            write_client.patch_json(
+                f"repos/{repository}/git/refs/heads/{branch_name}",
+                {"sha": new_head, "force": False},
+                expected=(200,),
+            )
+            branch_head = new_head
 
-    body = payload.get("body") or ""
-    body += (
-        f"\n\n---\nBridge operation: `{operation_id}`\n"
-        f"Expected canonical base: `{current_head}`\n"
+    body_base = payload.get("body") or ""
+    body = (
+        f"{body_base.rstrip()}\n\n---\nBridge operation: {operation_id}\n"
+        f"Stable change_id: {requested_change_id}\n"
+        f"Expected canonical base: {current_head}\n"
         f"Files: {', '.join(item['path'] for item in files)}\n\n"
-        "The API created one branch and one pull request only. Relevant pull_request workflows "
-        "are the validation mechanism; do not dispatch those same gates manually while they run."
-    )
+        "GitHub pull_request workflows validate this change. Do not dispatch the same gate manually while those checks are running."
+    ).strip()
     pr = write_client.post_json(
         f"repos/{repository}/pulls",
         {
@@ -213,14 +335,13 @@ def _create_change_request_unlocked(
         "canonical_branch": canonical_branch,
         "current_head_sha": current_head,
         "operation_id": operation_id,
+        "change_id": requested_change_id,
         "branch": branch_name,
         "branch_head_sha": branch_head,
         "pull_request_number": int(pr["number"]),
         "pull_request_url": pr.get("html_url"),
-        "detail": "Created a single branch and PR. GitHub pull_request workflows will determine validation; no duplicate gate dispatch was sent.",
+        "detail": "Created one branch and PR for the task; GitHub pull_request workflows validate it, without a duplicate gate dispatch.",
     }
-
-
 
 _CHANGE_LOCKS = {"lite": threading.Lock(), "plus": threading.Lock()}
 
