@@ -201,3 +201,55 @@ def test_merge_allows_prose_only_change_without_new_actions():
     assert result["decision"] == "MERGED"
     assert result["validated_check_runs"] == []
     assert writer.merge_calls == 1
+
+
+def test_failed_runner_retry_requires_explicit_review_reason(monkeypatch):
+    class Read:
+        def get_workflow_runs(self, repository, workflow_path, branch):
+            return [], True
+
+    class Writer:
+        def __init__(self):
+            self.dispatch_calls = 0
+
+        def dispatch_workflow(self, *args, **kwargs):
+            self.dispatch_calls += 1
+
+    writer = Writer()
+    plan = {
+        "state_status": "CURRENT",
+        "repository_full_name": "c2melendez/precision-lab-lite",
+        "canonical_branch": BRANCH,
+        "observed_head": HEAD,
+        "gate": {"decision": "DIAGNOSE", "input_fingerprint": "f" * 64, "reason": "Previous run failed"},
+    }
+    record = {
+        "gate": "cumulative",
+        "base_sha": HEAD,
+        "decision": "DISPATCHED",
+        "dispatched_status": "completed",
+        "dispatched_conclusion": "failure",
+        "runner_run_id": "12345",
+        "recorded_at": "2026-10-26T12:00:00Z",
+    }
+    monkeypatch.setattr(operations, "get_gate_plan", lambda *_: plan)
+    monkeypatch.setattr(operations, "get_runner_records", lambda *_a, **_k: [record])
+    operations._RECENT_DISPATCHES.pop(("lite", "cumulative", HEAD), None)
+
+    read = Read()
+    blocked = operations.execute_gate_request(read, writer, "lite", "cumulative")
+    assert blocked["decision"] == "DIAGNOSE"
+    assert blocked["action_taken"] is False
+    assert writer.dispatch_calls == 0
+
+    allowed = operations.execute_gate_request(
+        read,
+        writer,
+        "lite",
+        "cumulative",
+        retry_after_review=True,
+        retry_reason="Reviewed logs; runner failed during a transient dispatch fault.",
+    )
+    assert allowed["decision"] == "DISPATCHED"
+    assert allowed["action_taken"] is True
+    assert writer.dispatch_calls == 1
