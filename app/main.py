@@ -27,7 +27,7 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 app = FastAPI(
     title="Precision Lab Certification Read-only API",
     version="0.1.0",
-    summary="Read-only continuity, gate-planning, and GitHub Actions evidence for Precision Lab Lite and Plus.",
+    summary="Certification evidence plus separately authenticated, allowlisted runner dispatch.",
     description=(
         "Observation-only service for a GPT custom Action. No endpoint can dispatch, "
         "cancel, re-run, publish, push, or otherwise mutate certification resources. "
