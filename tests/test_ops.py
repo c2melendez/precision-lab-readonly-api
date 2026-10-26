@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
+from app.idempotency import IdempotencyUnavailable, digest_key, digest_request
 from app.ops import DispatchRequest, _auth, _ensure_dispatch_enabled, _validate
 
 
@@ -66,6 +67,24 @@ class DispatchValidationTests(unittest.TestCase):
     def test_auth_accepts_correct_key(self):
         with patch.dict(os.environ, {"OPS_API_KEY": "expected-test-key"}, clear=False):
             _auth("expected-test-key")
+
+
+class DurableIdempotencyUnitTests(unittest.TestCase):
+    def test_raw_key_is_hashed(self):
+        self.assertEqual(len(digest_key("test-idempotency-key-001")), 64)
+        self.assertNotEqual(digest_key("test-idempotency-key-001"), "test-idempotency-key-001")
+
+    def test_request_digest_is_independent_of_dict_order(self):
+        self.assertEqual(
+            digest_request({"repo": "lite", "operation": "gate"}),
+            digest_request({"operation": "gate", "repo": "lite"}),
+        )
+
+    def test_missing_database_fails_closed(self):
+        with patch.dict(os.environ, {"OPS_DATABASE_URL": ""}, clear=False):
+            with self.assertRaises(IdempotencyUnavailable):
+                from app.idempotency import _database_url
+                _database_url()
 
 
 if __name__ == "__main__":
