@@ -76,7 +76,7 @@ def test_stale_snapshot_is_rejected():
         plan(state, live, lambda sha: {})
 
 
-def test_fingerprint_excludes_only_explicit_prose_and_continuity_index():
+def test_fingerprint_excludes_explicit_prose_continuity_index_and_generated_runner_records():
     gate = {"workflow": ".github/workflows/x.yml", "inputs": ["*"], "acceptance_revision": "v1"}
     prose = ["qa/certification/CURRENT_STATE.md"]
     base = {
@@ -93,4 +93,14 @@ def test_fingerprint_excludes_only_explicit_prose_and_continuity_index():
     changed_runner_record["qa/certification/runner/1.json"] = ["100644", "blob", "7" * 40]
     assert fingerprint(base, gate, prose) == fingerprint(changed_prose, gate, prose)
     assert fingerprint(base, gate, prose) == fingerprint(changed_index, gate, prose)
-    assert fingerprint(base, gate, prose) != fingerprint(changed_runner_record, gate, prose)
+    assert fingerprint(base, gate, prose) == fingerprint(changed_runner_record, gate, prose)
+
+    # The exclusion is deliberately narrow: nonnumeric files, schemas, code,
+    # and certification contracts under the same directory remain gate inputs.
+    changed_runner_schema = dict(base)
+    changed_runner_schema["qa/certification/runner/schema.json"] = ["100644", "blob", "8" * 40]
+    assert fingerprint(base, gate, prose) != fingerprint(changed_runner_schema, gate, prose)
+
+    changed_contract = dict(base)
+    changed_contract["qa/certification/SY_P_23_CONVENTION.md"] = ["100644", "blob", "9" * 40]
+    assert fingerprint(base, gate, prose) != fingerprint(changed_contract, gate, prose)

@@ -194,15 +194,35 @@ def get_repo_status(client: GitHubReadClient, alias: str, pointers: dict[str, st
     workflow_version = f"v{version_match.group(1)}" if version_match else "unknown"
     record = latest_runner_record(client, repository, canonical_branch)
     if record:
-        for commit in record.get("commits", []) or []:
-            subject = str(commit.get("subject", ""))
-            if "[skip ci]" in subject.lower():
-                warning = (
-                    f"{alias}: latest runner record includes a documentation commit subject with [skip ci]; "
-                    "this conflicts with runner-v3 comments that say not to use [skip ci]. Verify the actual workflow trigger/filter behavior."
-                )
-                if warning not in warnings:
-                    warnings.append(warning)
+        skip_markers = (
+            "[skip ci]", "[ci skip]", "[no ci]", "[skip actions]", "[actions skip]",
+        )
+        has_skip_marker = any(
+            any(marker in str(commit.get("subject", "")).lower() for marker in skip_markers)
+            for commit in record.get("commits", []) or []
+        )
+        # A marker matters for certification only when the published package
+        # changed a path that participates in a gate fingerprint. State prose,
+        # continuity.json, and numeric runner records are excluded by policy.
+        prose_only_paths = set(state.get("prose_only_paths", []))
+        package_paths = record.get("paths", []) or []
+        gate_input_paths = [
+            path for path in package_paths
+            if isinstance(path, str)
+            and path not in prose_only_paths
+            and path != CONTINUITY_PATH
+            and not re.fullmatch(r"qa/certification/runner/[0-9]{1,20}\\.json", path)
+        ]
+        if has_skip_marker and gate_input_paths:
+            shown = ", ".join(gate_input_paths[:5])
+            suffix = " ..." if len(gate_input_paths) > 5 else ""
+            warning = (
+                f"{alias}: a historical docs-package commit contains a skip-Actions marker while changing "
+                f"certification inputs ({shown}{suffix}); reconcile its workflow evidence. New docs-package "
+                "commits must not contain skip markers; runner-generated numeric records are excluded from fingerprints."
+            )
+            if warning not in warnings:
+                warnings.append(warning)
 
     return {
         "repo": alias,

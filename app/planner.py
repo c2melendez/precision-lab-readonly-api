@@ -8,15 +8,21 @@ from typing import Any, Callable
 
 
 def selected(path: str, gate: dict[str, Any], prose_paths: list[str]) -> bool:
-    # Mirrors scripts/certification/continuity.py: exact prose allowlist only.
-    if path in prose_paths or path == "qa/certification/continuity.json":
+    # Gate result records are produced after execution and must not invalidate
+    # the gate fingerprint that they document. Exclude numeric runner records
+    # only; keep runner code, tests, schemas, and all other certification files.
+    if (
+        path in prose_paths
+        or path == "qa/certification/continuity.json"
+        or re.fullmatch(r"qa/certification/runner/[0-9]{1,20}\.json", path)
+    ):
         return False
     return any(fnmatch.fnmatchcase(path, pattern) for pattern in gate["inputs"])
 
 
 def fingerprint(entries: dict[str, list[str]], gate: dict[str, Any], prose_paths: list[str]) -> str:
     payload = {
-        "planner_version": 1,
+        "planner_version": 2,
         "gate": gate,
         "inputs": {
             path: value
