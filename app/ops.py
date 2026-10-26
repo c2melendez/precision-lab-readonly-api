@@ -40,6 +40,12 @@ def _auth(key: str | None) -> None:
         raise HTTPException(status_code=401, detail="Missing or invalid operations key")
 
 
+def _ensure_dispatch_enabled() -> None:
+    """Fail closed until durable idempotency and rollout checks are complete."""
+    if os.getenv("OPS_DISPATCH_ENABLED", "").strip().lower() != "true":
+        raise HTTPException(status_code=503, detail="Runner dispatch is disabled pending idempotency and rollout validation")
+
+
 def _validate(body: DispatchRequest) -> None:
     if body.operation == "docs":
         if body.docs_patch_sha256 and not SHA256.fullmatch(body.docs_patch_sha256):
@@ -61,9 +67,7 @@ async def dispatch(
 ):
     _auth(x_ops_key)
     _validate(body)
-    # Fail closed until durable idempotency and deployment checks are complete.
-    if os.getenv("OPS_DISPATCH_ENABLED", "").strip().lower() != "true":
-        raise HTTPException(status_code=503, detail="Runner dispatch is disabled pending idempotency and rollout validation")
+    _ensure_dispatch_enabled()
     token = os.getenv("RUNNER_DISPATCH_TOKEN", "").strip()
     if not token:
         raise HTTPException(status_code=503, detail="Runner dispatch credential is not configured")
