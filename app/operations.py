@@ -59,7 +59,7 @@ def _decode_content(payload: dict[str, Any] | None) -> str | None:
         return None
 
 
-def create_change_request(
+def _create_change_request_unlocked(
     read_client: GitHubReadClient,
     write_client: GitHubWriteClient,
     payload: dict[str, Any],
@@ -214,6 +214,23 @@ def create_change_request(
         "pull_request_url": pr.get("html_url"),
         "detail": "Created a single branch and PR. GitHub pull_request workflows will determine validation; no duplicate gate dispatch was sent.",
     }
+
+
+
+_CHANGE_LOCKS = {"lite": threading.Lock(), "plus": threading.Lock()}
+
+
+def create_change_request(
+    read_client: GitHubReadClient,
+    write_client: GitHubWriteClient,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Serialize concurrent requests for the same repository."""
+    alias = payload.get("repo")
+    if alias not in REPOSITORIES:
+        raise ValueError("repo must be lite or plus")
+    with _CHANGE_LOCKS[alias]:
+        return _create_change_request_unlocked(read_client, write_client, payload)
 
 
 def merge_pull_request(
