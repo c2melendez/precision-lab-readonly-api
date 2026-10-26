@@ -12,6 +12,8 @@ services:
         sync: false
       - key: SERVICE_API_KEY
         sync: false
+      - key: GITHUB_WRITE_TOKEN
+        sync: false
       - key: PUBLIC_BASE_URL
         value: "https://precision-lab-readonly-api.onrender.com"
       - key: GITHUB_TIMEOUT_SECONDS
