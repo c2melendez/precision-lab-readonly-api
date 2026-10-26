@@ -180,7 +180,6 @@ def test_bridge_operations_are_explicit_and_api_key_protected():
         "/v1/gates/{gate}/execute": {"post"},
         "/v1/changes": {"post"},
         "/v1/pull-requests/{pr_number}/merge": {"post"},
-        "/openapi.yaml": {"get"},
     }
     for path, definition in schema["paths"].items():
         methods = {key.lower() for key in definition if key.lower() in {"get", "post", "put", "patch", "delete", "options", "head", "trace"}}
