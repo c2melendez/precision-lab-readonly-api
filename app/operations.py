@@ -497,8 +497,11 @@ def execute_gate_request(
     write_client: GitHubWriteClient,
     alias: str,
     gate_name: str,
+    *,
+    retry_after_review: bool = False,
+    retry_reason: str | None = None,
 ) -> dict[str, Any]:
-    """Dispatch a gate only when live planning explicitly says RUN.
+    """Dispatch a gate only when planning authorizes it; retries require explicit failure review.
 
     All other planner decisions are returned without writing to GitHub. A PR-based
     change operation is intentionally separate: PR checks should not be duplicated
@@ -506,6 +509,9 @@ def execute_gate_request(
     """
     if alias not in REPOSITORIES:
         raise ValueError("repo must be lite or plus")
+
+    if retry_after_review and (not retry_reason or len(retry_reason.strip()) < 20):
+        raise ValueError("An intentional retry requires a review reason of at least 20 characters")
 
     with _GATE_LOCKS[alias]:
         plan = get_gate_plan(read_client, alias, gate_name)
@@ -524,11 +530,13 @@ def execute_gate_request(
             "runner_run_url": None,
         }
 
-        if plan["state_status"] != "CURRENT" or decision != "RUN":
-            base_response["decision"] = decision if plan["state_status"] == "CURRENT" else "REFRESH"
-            base_response["detail"] = gate_plan.get("reason") or plan.get("reconciliation_action") or (
-                "Planner decision is not RUN; no GitHub Actions workflow was dispatched."
-            )
+        if plan["state_status"] != "CURRENT":
+            base_response["decision"] = "REFRESH"
+            base_response["detail"] = plan.get("reconciliation_action") or "Continuity state is not current; refresh before any dispatch."
+            return base_response
+        if decision != "RUN" and not (decision == "DIAGNOSE" and retry_after_review):
+            base_response["decision"] = decision
+            base_response["detail"] = gate_plan.get("reason") or "Planner decision is not RUN; no GitHub Actions workflow was dispatched."
             return base_response
 
         repository = REPOSITORIES[alias]
@@ -577,13 +585,30 @@ def execute_gate_request(
         ]
         if prior:
             latest = max(prior, key=lambda record: str(record.get("recorded_at", "")))
+            prior_decision = str(latest.get("decision", "")).upper()
+            prior_status = str(latest.get("dispatched_status", "")).lower()
+            prior_conclusion = str(latest.get("dispatched_conclusion", "")).lower()
+            retryable_failure = (
+                prior_decision == "NOT_DISPATCHED"
+                or (
+                    prior_status == "completed"
+                    and prior_conclusion in {"failure", "cancelled", "timed_out", "startup_failure", "action_required", "stale"}
+                )
+            )
+            if not retry_after_review or not retryable_failure:
+                base_response.update({
+                    "decision": "DIAGNOSE",
+                    "detail": (
+                        "A prior runner record exists for this gate and HEAD. Do not repeat it automatically; "
+                        "a deliberate retry is allowed only after reviewing a recorded failed or not-dispatched attempt."
+                    ),
+                    "prior_runner_run_id": str(latest.get("runner_run_id", "")),
+                })
+                return base_response
+        elif decision == "DIAGNOSE":
             base_response.update({
                 "decision": "DIAGNOSE",
-                "detail": (
-                    "A prior runner record exists for the same gate and HEAD. Review its linked runner/child run before "
-                    "requesting any retry; this API will not repeat that operation automatically."
-                ),
-                "prior_runner_run_id": str(latest.get("runner_run_id", "")),
+                "detail": "No matching runner record could be tied to this HEAD; inspect live Actions history before retrying.",
             })
             return base_response
 
