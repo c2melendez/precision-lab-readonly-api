@@ -99,6 +99,15 @@ class GitHubWriteClient:
     ) -> Any:
         return self.request_json("PUT", path, body=body, expected=expected)
 
+    def patch_json(
+        self,
+        path: str,
+        body: dict[str, Any],
+        *,
+        expected: tuple[int, ...] = (200,),
+    ) -> Any:
+        return self.request_json("PATCH", path, body=body, expected=expected)
+
     def dispatch_workflow(self, repository: str, workflow_path: str, ref: str, inputs: dict[str, str]) -> None:
         workflow = workflow_path.rsplit("/", 1)[-1]
         self.request_json(
