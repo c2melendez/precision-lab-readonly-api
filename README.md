@@ -1,6 +1,6 @@
 # Precision Lab — Bridge API de certificación
 
-**Estado actualizado (corte 2026-10-26 16:57 UTC):** el planificador v2 está desplegado en Render. El deploy actual `dep-dbfnu8nlk1mc73fksl6g` está `live` sobre el commit `b6d5efdcae0802d5b5a24c79d8d7373bfa9e1acd`. Los logs confirman que Uvicorn inició y la aplicación terminó su arranque.
+**Estado de implementación (26-10-2026):** el despliegue `live` de Render sigue siendo la versión de solo lectura; el Bridge con operaciones autenticadas se está preparando en la rama `feature/bridge-authorized-operations-20261026`. El planificador v2 está desplegado en Render. El deploy actual `dep-dbfnu8nlk1mc73fksl6g` está `live` sobre el commit `b6d5efdcae0802d5b5a24c79d8d7373bfa9e1acd`. Los logs confirman que Uvicorn inició y la aplicación terminó su arranque.
 
 **Configuración y prueba final aún pendientes:** Render sigue reportando `healthCheckPath` vacío aunque `render.yaml` declara `/healthz`. La presencia de `GITHUB_READ_TOKEN` y `SERVICE_API_KEY` no se pudo confirmar mediante los metadatos disponibles; no asumir que faltan ni revelar sus valores. No se completó en este corte una prueba autenticada de `/v1/status` o del planificador. `autoDeployTrigger` sigue desactivado, por lo que los futuros cambios requieren despliegue deliberado.
 
@@ -16,6 +16,9 @@ Servicio HTTP de Bridge para que un GPT personalizado consulte evidencia y solic
 | GET | `/v1/status?repo=lite\|plus\|both` | Rama predeterminada/canónica, HEAD, revisión, bloqueos, estado de reconciliación, versión del runner y registro documental más reciente disponible. |
 | GET | `/v1/gates/{gate}/plan?repo=lite\|plus&refresh=true` | Ejecuta la lógica de decisión en modo lectura; nunca inicia un gate. |
 | GET | `/v1/runs/{run_id}?repo=lite\|plus` | Evidencia bruta de Actions, jobs/pasos y registro del runner relacionado cuando puede encontrarse. |
+| POST | `/v1/gates/{gate}/execute?repo=lite\|plus` | Solicita al Runner que ejecute el gate solo cuando el planificador vivo devuelve `RUN`. En otro caso responde `WAIT`, `REUSE`, `DIAGNOSE` o `REFRESH` sin crear otra ejecución. El reintento de un fallo exige `retry_after_review=true` y motivo de diagnóstico. |
+| POST | `/v1/changes` | Crea o actualiza una rama/PR mediante `change_id` estable. Si el contenido ya coincide, devuelve `REUSE`; las correcciones sucesivas actualizan el mismo PR y sus checks validan el nuevo HEAD. No despacha gates en paralelo. |
+| POST | `/v1/pull-requests/{pr_number}/merge` | Fusiona solo si el PR abierto corresponde al SHA esperado y sus check-runs no están pendientes ni fallidos. Sin nuevos Actions únicamente cuando todos los archivos cambiados están declarados en `prose_only_paths` en el `continuity.json` canónico. |
 | GET | `/openapi.json` / `/openapi.yaml` | Especificación importable para GPT Actions. |
 
 La API acepta únicamente los alias `lite` y `plus`, no nombres de repositorio arbitrarios. Para correcciones sucesivas, conserva el mismo `change_id` y refresca `expected_head_sha` antes de enviar la nueva versión; así se actualiza el mismo PR. Usa un `change_id` nuevo para una tarea independiente. Responde con `Cache-Control: no-store`; el indicador `X-Read-Only` distingue las rutas de lectura de los endpoints de operación. Los POST crean/actualizan un PR de tarea, solicitan el Runner con decisión `RUN`, o intentan una fusión explícitamente solicitada después de validar los checks. `success` de GitHub Actions nunca se transforma automáticamente en `PASS`.
