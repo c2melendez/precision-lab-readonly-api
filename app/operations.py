@@ -101,7 +101,7 @@ def create_change_request(
     operation_id = hashlib.sha256(
         json.dumps(fingerprint_input, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
-    branch_name = f"bridge/{operation_id[:20]}"
+    branch_name = f"bridge-{operation_id[:20]}"
 
     # A retry after a network timeout must return the existing PR rather than create another.
     existing_prs = write_client.get_json(
