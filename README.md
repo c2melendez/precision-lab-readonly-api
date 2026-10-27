@@ -131,3 +131,9 @@ En el corte de 2026-10-26, Lite está en revisión documental r301 y Plus en r31
 - YAML de Render: sintaxis local comprobable; el CLI de Render no estaba instalado, por lo que no afirmo que se haya ejecutado `render blueprints validate` ni una validación de Blueprint con la API de Render.
 - En este seguimiento se verificó el deploy `dep-dbfnu8nlk1mc73fksl6g` (`live`) y los logs de arranque. No se ejecutaron gates nuevos de certificación para este seguimiento.
 - Queda pendiente validar en el Dashboard que `healthCheckPath=/healthz`, confirmar la configuración de los secretos sin exponer sus valores y ejecutar `verify-live-api.ps1` para comprobar los endpoints protegidos. Hasta completar esos pasos, la API no debe considerarse plenamente validada de extremo a extremo.
+
+## 2026-10-27 — reconciliación externa de evidencia de Actions
+
+- Plus run [40429424316](https://github.com/c2melendez/precision-lab-plus/actions/runs/40429424316): H1d SUCCESS, 38 pruebas Playwright, SHA canónico `c6549bfd4943938be0db2a43fad5bfa33b169708`.
+- Lite run [40403964745](https://github.com/c2melendez/precision-lab-lite/actions/runs/40403964745): frontend SUCCESS sobre merge SHA `cdc9c94841505e3d39696fb4c349c7cc396743ef`, auditoría con 0 vulnerabilidades, typecheck, tests y build. No equivale a validar el SHA canónico de Lite.
+- Ambos resultados son evidencia de gates de repositorio, no de la transacción API→Bridge→Runner. La prueba autenticada de `/v1/status?repo=both`, la reconciliación del health check efectivo y el E2E siguen pendientes.
