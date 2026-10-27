@@ -1,8 +1,8 @@
 # Precision Lab — API de certificación de solo lectura
 
-**Estado actualizado (corte 2026-10-26 16:57 UTC):** el planificador v2 está desplegado en Render. El deploy actual `dep-dbfnu8nlk1mc73fksl6g` está `live` sobre el commit `b6d5efdcae0802d5b5a24c79d8d7373bfa9e1acd`. Los logs confirman que Uvicorn inició y la aplicación terminó su arranque.
+**Estado actualizado (corte 2026-10-26 21:00 UTC):** el planificador v2 está desplegado en Render. El deploy `dep-dbfnu8nlk1mc73fksl6g` figura `live` sobre el commit `b6d5efdcae0802d5b5a24c79d8d7373bfa9e1acd`. Los logs de producción confirman `GET /healthz` → `200` y `GET /openapi.json` → `200`; también confirman que `GET /v1/status` sin credenciales devuelve `401`, comportamiento esperado para una ruta protegida.
 
-**Configuración y prueba final aún pendientes:** Render sigue reportando `healthCheckPath` vacío aunque `render.yaml` declara `/healthz`. La presencia de `GITHUB_READ_TOKEN` y `SERVICE_API_KEY` no se pudo confirmar mediante los metadatos disponibles; no asumir que faltan ni revelar sus valores. No se completó en este corte una prueba autenticada de `/v1/status` o del planificador. `autoDeployTrigger` sigue desactivado, por lo que los futuros cambios requieren despliegue deliberado.
+**Integración todavía no cerrada:** Render continúa reportando `healthCheckPath` vacío aunque `render.yaml` declara `/healthz`, así que hay deriva entre configuración versionada y configuración efectiva del servicio. No se ha probado una llamada autenticada correcta a `/v1/status?repo=both` ni al planificador. La presencia de `GITHUB_READ_TOKEN` y `SERVICE_API_KEY` no se pudo confirmar mediante metadatos; no asumir que faltan ni revelar valores. `autoDeployTrigger` está desactivado: los cambios del repositorio no despliegan por sí solos.
 
 Servicio HTTP para que un GPT personalizado consulte el estado de Precision Lab Lite/Plus sin recibir credenciales de GitHub ni permisos para ejecutar operaciones. No se conecta a los productos como aplicación matemática y no modifica los repositorios.
 
