@@ -141,3 +141,14 @@ En el corte de 2026-10-26, Lite está en revisión documental r301 y Plus en r31
 ## Bridge y automatización end-to-end — corte 2026-10-27
 
 La búsqueda en los repositorios disponibles no identificó un repositorio/endpoint Bridge inequívoco para la certificación. El término “Bridge” encontrado en Lite corresponde a stores de navegación UI/Argand/Graphing, no a una integración GitHub→API→Runner; no se considera evidencia del Bridge de certificación. El API sigue siendo estrictamente GET/read-only: no puede disparar workflows ni publicar resultados. Por tanto, el circuito de automatización requiere un componente externo identificado y sigue `NOT_YET_VERIFIED`. No crear un endpoint ficticio ni ampliar permisos de la API para suplir ese componente.
+
+
+## Certificación de conexión alternativa — prioridad P0
+
+La API de este repositorio sigue siendo **solo de lectura** y no implementa el Bridge de ejecución ni despacha GitHub Actions. La ruta completa `Push → API → Bridge → Runner → resultado verificable` permanece sin certificar hasta que cada eslabón tenga evidencia y la idempotencia sea durable.
+
+Documentos operativos coordinados con el Prompt maestro (repositorios Lite/Plus, rama canónica activa):
+- [HANDOFF_GITHUB_ALTERNATIVE_CONNECTION.md](https://github.com/c2melendez/precision-lab-plus/blob/qa/syntax-audit-in625-a1/qa/certification/HANDOFF_GITHUB_ALTERNATIVE_CONNECTION.md)
+- [ROADMAP_GITHUB_ALTERNATIVE_CONNECTION.md](https://github.com/c2melendez/precision-lab-plus/blob/qa/syntax-audit-in625-a1/qa/certification/ROADMAP_GITHUB_ALTERNATIVE_CONNECTION.md)
+
+El Prompt maestro de Lite y Plus prioriza estos documentos antes de reanudar la certificación general de motores matemáticos. El proyecto Supabase `oqlzftercvraprnvjifo` se reportó INACTIVE; no se ha inspeccionado el esquema porque las consultas de tablas/migraciones no pudieron completarse. No se aplicaron cambios de esquema.
