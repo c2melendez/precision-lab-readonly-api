@@ -137,3 +137,7 @@ En el corte de 2026-10-26, Lite está en revisión documental r301 y Plus en r31
 - Plus run [40429424316](https://github.com/c2melendez/precision-lab-plus/actions/runs/40429424316): H1d SUCCESS, 38 pruebas Playwright, SHA canónico `c6549bfd4943938be0db2a43fad5bfa33b169708`.
 - Lite run [40403964745](https://github.com/c2melendez/precision-lab-lite/actions/runs/40403964745): frontend SUCCESS sobre merge SHA `cdc9c94841505e3d39696fb4c349c7cc396743ef`, auditoría con 0 vulnerabilidades, typecheck, tests y build. No equivale a validar el SHA canónico de Lite.
 - Ambos resultados son evidencia de gates de repositorio, no de la transacción API→Bridge→Runner. La prueba autenticada de `/v1/status?repo=both`, la reconciliación del health check efectivo y el E2E siguen pendientes.
+
+## Bridge y automatización end-to-end — corte 2026-10-27
+
+La búsqueda en los repositorios disponibles no identificó un repositorio/endpoint Bridge inequívoco para la certificación. El término “Bridge” encontrado en Lite corresponde a stores de navegación UI/Argand/Graphing, no a una integración GitHub→API→Runner; no se considera evidencia del Bridge de certificación. El API sigue siendo estrictamente GET/read-only: no puede disparar workflows ni publicar resultados. Por tanto, el circuito de automatización requiere un componente externo identificado y sigue `NOT_YET_VERIFIED`. No crear un endpoint ficticio ni ampliar permisos de la API para suplir ese componente.
