@@ -33,7 +33,13 @@ Se creó una corrida de GitHub Actions al añadir el workflow:
 
 **Interpretación:** no existe evidencia de que \`pytest\` se haya llegado a ejecutar. Registrar como \`BLOCKED / FAIL ANTES DE EJECUTAR LOS PASOS\`, no como test unitario fallido ni como código aprobado. La causa exacta de la falta de runner no quedó establecida; no asumir que sea un fallo del código ni asegurar que sea una cuota sin evidencia adicional.
 
-No se han lanzado nuevas corridas tras esta observación para evitar reintentos redundantes sin resolver primero el problema de ejecución de Actions.
+Una actualización posterior del verificador cambió los IDs de su registro para diferenciarlos de la batería v2 y activó la corrida automática de la misma matriz:
+
+- Run: [40637713482](https://github.com/c2melendez/precision-lab-readonly-api/actions/runs/40637713482)
+- Commit: `67e06b931897624c07b3e19583308c0b4ab63134`
+- Ambos jobs terminaron también con `failure`, `runner_id: 0`, nombre de runner vacío y sin pasos observados.
+
+La segunda evidencia reproduce el mismo fallo previo a los pasos. No se harán más pushes que activen esta matriz ni reintentos manuales hasta disponer de una causa o de capacidad de runner confirmada.
 
 ## Próximos pasos
 
