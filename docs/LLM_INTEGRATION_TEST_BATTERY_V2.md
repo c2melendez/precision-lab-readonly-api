@@ -73,7 +73,9 @@ The adapter supplies `openai_compatible_tool_schemas()`, `gemini_function_declar
 | T24 | Copilot Studio REST | Copilot Studio with appropriate license/permissions | Import `integrations/copilot-studio/precision-lab-swagger2.json`, configure `X-API-Key`, and run a GET status action | Import/configuration not available = BLOCKED |
 | T25 | ChatGPT custom GPT Action | Only in a GPT where this Action is configured and enabled | Action invocation log plus authenticated response from T03 is available | Do not require this route for other profiles |
 | T26 | ChatGPT custom remote MCP | Only eligible workspace/product, with a separately hosted remote MCP endpoint | Remote connection discovers tools and authenticated status call succeeds | `N/A` for the local stdio adapter; this branch does not deploy a public MCP endpoint |
-| T27 | Meta AI consumer chat | The specific consumer interface being evaluated | Mark PASS only if that exact interface offers a supported custom tool/API connection and it makes a real call | Otherwise `NOT VERIFIED` or `N/A`; a custom Llama/model API application is a separate profile |
+| T27 | Meta Model API function calling | Custom app using Meta Model API / Muse Chat Completions or Responses API, depending on schema | A real model tool-call is executed by the host, the returned REST JSON is fed back to the model, and the final answer matches the response | Without API credentials/host, BLOCKED. A schema alone is not PASS |
+| T28 | Meta AI Connectors preview | Exact connector preview account, once accepted by Meta | Connector is onboarded and invoked in the permitted Meta AI surface; auth is checked without exposing the API key | BLOCKED until preview access is granted; reconcile OAuth account-linking requirements with this service's X-API-Key auth |
+| T29 | Meta AI consumer without connector | The exact consumer website/app surface | PASS only if a supported user-configured API/connector is enabled and actually invoked | Otherwise NOT VERIFIED / N/A; do not treat Meta Model API as the same product |
 
 Provider tests T17–T20 are separate cases. A function schema that works in one provider does not prove it works in another, and tests that lack provider credentials or an executable host remain BLOCKED.
 
@@ -81,9 +83,9 @@ Provider tests T17–T20 are separate cases. A function schema that works in one
 
 | ID | Test | PASS criteria |
 |---|---|---|
-| T28 | Read-only boundary | Adapter exposes only the three allowlisted functions; client code can issue GET only; no POST, PATCH, PUT, DELETE, dispatch, commit, push or Bridge invocation exists in the tool path |
-| T29 | Result semantics | `RUN` is presented as advice; HTTP 200 is not certification; GitHub Actions success is raw evidence; unknown gate/state remains unresolved |
-| T30 | Continuity/handoff | Report preserves evidence references, actual status per profile, exact blocker and next step; doesn't repeat already valid observations or treat a reasoning-only PASS as integration PASS |
+| T30 | Read-only boundary | Adapter exposes only the three allowlisted functions; client code can issue GET only; no POST, PATCH, PUT, DELETE, dispatch, commit, push or Bridge invocation exists in the tool path |
+| T31 | Result semantics | `RUN` is presented as advice; HTTP 200 is not certification; GitHub Actions success is raw evidence; unknown gate/state remains unresolved |
+| T32 | Continuity/handoff | Report preserves evidence references, actual status per profile, exact blocker and next step; doesn't repeat already valid observations or treat a reasoning-only PASS as integration PASS |
 
 ## Starter record
 
@@ -91,7 +93,7 @@ Copy this block for each run of the battery; use one row per test and profile.
 
 | Test | Client/product and version | Profile | State | HTTP/status or evidence reference | Notes / next dependency |
 |---|---|---|---|---|---|
-| T01–T30 | Fill in individually | REST / Action / MCP / provider SDK / Copilot | PENDING | Not run | Do not leave a range scored as one PASS |
+| T01–T32 | Fill in individually | REST / Action / MCP / provider SDK / Copilot | PENDING | Not run | Do not leave a range scored as one PASS |
 
 ## Initial execution order
 
