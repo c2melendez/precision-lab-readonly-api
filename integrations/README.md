@@ -46,7 +46,7 @@ En `.vscode/mcp.json` del usuario/workspace, puedes usar la entrada de credencia
     "precision-lab-readonly": {
       "type": "stdio",
       "command": "python",
-      "args": ["-m", "integrations.mcp_server"],
+      "args": ["/ABSOLUTE/PATH/TO/precision-lab-readonly-api/integrations/mcp_server.py"],
       "env": {
         "SERVICE_API_KEY": "\${input:precisionLabApiKey}",
         "PRECISION_LAB_API_BASE_URL": "https://precision-lab-readonly-api.onrender.com"
@@ -56,7 +56,7 @@ En `.vscode/mcp.json` del usuario/workspace, puedes usar la entrada de credencia
 }
 ```
 
-Ejecuta el host con el directorio de trabajo en la raíz local del repositorio, o configura su entorno para que Python pueda importar el paquete `integrations`. No añadas la clave literal a un archivo versionado. Esta configuración es un ejemplo para VS Code, no una configuración universal para todos los clientes MCP.
+Sustituye la ruta absoluta por la ruta local real. El script añade la raíz del repositorio a `sys.path` cuando se lanza por ruta absoluta. No añadas la clave literal a un archivo versionado. Esta configuración es un ejemplo para VS Code, no una configuración universal para todos los clientes MCP.
 
 ### Claude Desktop y Gemini CLI
 
