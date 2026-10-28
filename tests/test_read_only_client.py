@@ -133,13 +133,29 @@ def test_api_base_url_must_be_https_and_must_not_embed_credentials():
     with pytest.raises(ValueError, match="HTTPS"):
         ReadOnlyApiClient(base_url="http://example.test", api_key="key")
     with pytest.raises(ValueError, match="credentials"):
-        ReadOnlyApiClient(base_url="https://user:pass@example.test", api_key="key")
+        ReadOnlyApiClient(base_url="https://user:pass@precision-lab-readonly-api.onrender.com", api_key="key")
 
 
 def test_function_schemas_are_available_for_openai_compatible_and_gemini_hosts():
     openai_tools = openai_compatible_tool_schemas()
     gemini_tools = gemini_function_declarations()
 
+    def schema_keys(node):
+        if isinstance(node, dict):
+            nested = set()
+            for value in node.values():
+                nested |= schema_keys(value)
+            return set(node) | nested
+        if isinstance(node, list):
+            nested = set()
+            for value in node:
+                nested |= schema_keys(value)
+            return nested
+        return set()
+
+    assert "additionalProperties" not in schema_keys(gemini_tools)
+    assert "pattern" not in schema_keys(gemini_tools)
+    assert "default" not in schema_keys(gemini_tools)
     assert {item["function"]["name"] for item in openai_tools} == {
         "precision_lab_status",
         "precision_lab_gate_plan",
@@ -166,3 +182,13 @@ def test_missing_api_key_is_rejected_before_network_call(monkeypatch):
     monkeypatch.delenv("SERVICE_API_KEY", raising=False)
     with pytest.raises(ValueError, match="API key is missing"):
         ReadOnlyApiClient.from_environment()
+
+def test_untrusted_custom_https_host_requires_explicit_opt_in(monkeypatch):
+    monkeypatch.delenv("PRECISION_LAB_ALLOW_CUSTOM_BASE_URL", raising=False)
+    with pytest.raises(ValueError, match="not allowlisted"):
+        ReadOnlyApiClient(base_url="https://example.test", api_key="key")
+
+    monkeypatch.setenv("PRECISION_LAB_ALLOW_CUSTOM_BASE_URL", "true")
+    with ReadOnlyApiClient(base_url="https://example.test", api_key="key") as client:
+        assert client.base_url == "https://example.test"
+
