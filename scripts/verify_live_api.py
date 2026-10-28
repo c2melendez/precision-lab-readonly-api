@@ -102,15 +102,15 @@ def run_verification(
     with httpx.Client(base_url=base, timeout=30, follow_redirects=False) as public:
         code, body, error = request_json(public, "/healthz")
         if error:
-            records.append(result("T01", "BLOCKED" if code is None else "FAIL", error, http_status=code))
+            records.append(result("LV-T01", "BLOCKED" if code is None else "FAIL", error, http_status=code))
         elif code == 200 and body and body.get("status") == "ok" and body.get("read_only") is True:
-            records.append(result("T01", "PASS", "Public liveness confirms the service is up and read-only.", http_status=code, evidence=body))
+            records.append(result("LV-T01", "PASS", "Public liveness confirms the service is up and read-only.", http_status=code, evidence=body))
         else:
-            records.append(result("T01", "FAIL", "Unexpected liveness response.", http_status=code, evidence=body))
+            records.append(result("LV-T01", "FAIL", "Unexpected liveness response.", http_status=code, evidence=body))
 
         code, schema, error = request_json(public, "/openapi.json")
         if error:
-            records.append(result("T02", "BLOCKED" if code is None else "FAIL", error, http_status=code))
+            records.append(result("LV-T02", "BLOCKED" if code is None else "FAIL", error, http_status=code))
         else:
             expected_paths = {"/healthz", "/v1/status", "/v1/gates/{gate}/plan", "/v1/runs/{run_id}"}
             actual_paths = set((schema or {}).get("paths", {}))
@@ -130,31 +130,31 @@ def run_verification(
                 "x_api_key_header": auth_ok,
                 "server_matches_base_url": server_ok,
             }
-            records.append(result("T02", "PASS" if code == 200 and schema_ok else "FAIL",
+            records.append(result("LV-T02", "PASS" if code == 200 and schema_ok else "FAIL",
                                   "OpenAPI contract and GET-only surface checked.", http_status=code, evidence=evidence))
 
         code, body, error = request_json(public, "/v1/status", params={"repo": "both"})
         if error:
-            records.append(result("T03", "BLOCKED" if code is None else "FAIL", error, http_status=code))
+            records.append(result("LV-T03", "BLOCKED" if code is None else "FAIL", error, http_status=code))
         elif code == 401 and body and body.get("error") == "unauthorized":
-            records.append(result("T03", "PASS", "Protected status route rejects a request without credentials.", http_status=code, evidence=body))
+            records.append(result("LV-T03", "PASS", "Protected status route rejects a request without credentials.", http_status=code, evidence=body))
         else:
-            records.append(result("T03", "FAIL", "Unauthenticated status request did not return the expected HTTP 401.", http_status=code, evidence=body))
+            records.append(result("LV-T03", "FAIL", "Unauthenticated status request did not return the expected HTTP 401.", http_status=code, evidence=body))
 
     if not api_key.strip():
         for test_id, description in [
-            ("T04", "Authenticated bilateral status"),
-            ("T05", "Authenticated Lite status"),
-            ("T06", "Authenticated Plus status"),
+            ("LV-T04", "Authenticated bilateral status"),
+            ("LV-T05", "Authenticated Lite status"),
+            ("LV-T06", "Authenticated Plus status"),
         ]:
             records.append(result(test_id, "BLOCKED", f"{description} requires SERVICE_API_KEY in the process environment; it is not requested or printed by this script."))
     else:
         auth_headers = {"X-API-Key": api_key.strip(), "Accept": "application/json"}
         with httpx.Client(base_url=base, headers=auth_headers, timeout=60, follow_redirects=False) as authenticated:
             for test_id, repo, expected_aliases in [
-                ("T04", "both", {"lite", "plus"}),
-                ("T05", "lite", {"lite"}),
-                ("T06", "plus", {"plus"}),
+                ("LV-T04", "both", {"lite", "plus"}),
+                ("LV-T05", "lite", {"lite"}),
+                ("LV-T06", "plus", {"plus"}),
             ]:
                 code, body, error = request_json(authenticated, "/v1/status", api_key=api_key.strip(), params={"repo": repo})
                 if error:
@@ -166,8 +166,8 @@ def run_verification(
                                       f"Authenticated status checked for repo={repo}.", http_status=code, evidence=body))
 
             for test_id, repo, gate in [
-                ("T07", "lite", gate_lite),
-                ("T08", "plus", gate_plus),
+                ("LV-T07", "lite", gate_lite),
+                ("LV-T08", "plus", gate_plus),
             ]:
                 if not gate:
                     records.append(result(test_id, "PENDING", f"Supply an exact, already-grounded {repo.upper()} gate id to run this optional read-only plan test; the script does not guess gate ids."))
@@ -189,8 +189,8 @@ def run_verification(
                                       http_status=code, evidence=body))
 
             for test_id, repo, run_id in [
-                ("T09", "lite", run_lite),
-                ("T10", "plus", run_plus),
+                ("LV-T09", "lite", run_lite),
+                ("LV-T10", "plus", run_plus),
             ]:
                 if not run_id:
                     records.append(result(test_id, "PENDING", f"Supply a known numeric {repo.upper()} run id to retrieve its raw evidence."))
