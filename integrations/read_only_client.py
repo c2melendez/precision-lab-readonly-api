@@ -193,16 +193,54 @@ class ReadOnlyApiClient:
         return self._get_json(f"/v1/runs/{run_id}", params={"repo": repo})
 
 
+def _portable_tool_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Keep to the widely supported JSON Schema subset; executor validates omitted constraints."""
+    portable = {"type", "description", "properties", "required", "enum", "items", "nullable", "format"}
+    result: dict[str, Any] = {}
+    for key, value in schema.items():
+        if key not in portable:
+            continue
+        if key == "properties" and isinstance(value, dict):
+            result[key] = {
+                name: _portable_tool_schema(prop)
+                for name, prop in value.items()
+                if isinstance(prop, dict)
+            }
+        elif key == "items" and isinstance(value, dict):
+            result[key] = _portable_tool_schema(value)
+        else:
+            result[key] = value
+    return result
+
+
 def openai_compatible_tool_schemas() -> list[dict[str, Any]]:
-    """Return schemas in the common OpenAI-compatible function-calling format."""
+    """Return conservative Chat Completions schemas for OpenAI-compatible endpoints.
+
+    DeepSeek, Qwen, Meta Model API and xAI Chat Completions can use this nested
+    shape when the chosen model/endpoint documents Chat Completions tool calling.
+    Runtime validation remains strict in execute_readonly_tool().
+    """
     return [
         {
             "type": "function",
             "function": {
                 "name": tool["name"],
                 "description": tool["description"],
-                "parameters": tool["parameters"],
+                "parameters": _portable_tool_schema(tool["parameters"]),
             },
+        }
+        for tool in TOOL_SCHEMAS
+    ]
+
+
+def responses_api_tool_schemas() -> list[dict[str, Any]]:
+    """Return flat function tools used by Responses-style APIs (including Meta/xAI formats)."""
+    return [
+        {
+            "type": "function",
+            "name": tool["name"],
+            "description": tool["description"],
+            "parameters": _portable_tool_schema(tool["parameters"]),
         }
         for tool in TOOL_SCHEMAS
     ]
