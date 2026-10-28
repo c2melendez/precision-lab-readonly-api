@@ -50,7 +50,11 @@ Después del segundo fallo pre-ejecución, la rama se amplió sin volver a lanza
 - La batería ahora separa Meta Model API, Meta AI Connectors en vista previa y la aplicación Meta AI sin conector.
 - El verificador REST usa el prefijo `LV-Txx` para evitar colisiones con los IDs de la batería `Txx`.
 
-Estos cambios posteriores **no están cubiertos por un test ejecutado**. Las dos corridas anteriores terminaron antes de ejecutar ningún paso. Para evitar nuevos intentos push redundantes, se desactivaron los triggers automáticos `push`; el workflow conserva los disparadores `pull_request` y `workflow_dispatch`.
+Después de ese resumen también se:
+- añadió `responses_api_tool_schemas()` para herramientas de formato plano y se reforzó la validación de host/puerto para evitar enviar `SERVICE_API_KEY` a orígenes o puertos alternativos;
+- añadió `tests/test_live_verifier.py` para validar, mediante transporte HTTP simulado, el verificador de API y la redacción de claves.
+
+Estos cambios posteriores **no están cubiertos por un test ejecutado**. Las dos corridas anteriores terminaron antes de ejecutar ningún paso y preceden a los últimos cambios de esquema y pruebas. Para evitar nuevos intentos push redundantes, se desactivaron los triggers automáticos `push`; el workflow conserva los disparadores `pull_request` y `workflow_dispatch`.
 
 ## Próximos pasos
 
