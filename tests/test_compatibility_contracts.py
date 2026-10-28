@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from integrations.read_only_client import TOOL_SCHEMAS, gemini_function_declarations, openai_compatible_tool_schemas
+from integrations.read_only_client import (TOOL_SCHEMAS, gemini_function_declarations, openai_compatible_tool_schemas, responses_api_tool_schemas)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +48,9 @@ def test_tool_contract_matches_both_provider_adapters():
     }
     assert {tool["function"]["name"] for tool in openai_compatible_tool_schemas()} == names
     assert {tool["name"] for tool in gemini_function_declarations()} == names
+    flat_tools = responses_api_tool_schemas()
+    assert {tool["name"] for tool in flat_tools} == names
+    assert all(tool["type"] == "function" and "function" not in tool for tool in flat_tools)
     combined_descriptions = " ".join(item["description"].lower() for item in TOOL_SCHEMAS)
     assert "never dispatches" in combined_descriptions
     assert "success" in combined_descriptions
