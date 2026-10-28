@@ -68,6 +68,8 @@ Hallazgos de calidad importantes:
 
 Informe consolidado: [LLM_MULTI_CLIENT_RESULTS_REVIEW_2026-10-28.md](LLM_MULTI_CLIENT_RESULTS_REVIEW_2026-10-28.md).
 
+Procedimiento práctico de diagnóstico y ejecución local/autenticada: [ACTIONS_RUNNER_AND_AUTH_SMOKE_RUNBOOK_2026-10-28.md](ACTIONS_RUNNER_AND_AUTH_SMOKE_RUNBOOK_2026-10-28.md).
+
 Las respuestas HTTP 401 informadas sin clave solo confirman el control de acceso anónimo. No validan credenciales, gates, runs, estados internos, function calling, MCP ni conectores. No declarar PASS global ni FAIL del servicio a partir de estos resultados.
 
 ## Próximos pasos
