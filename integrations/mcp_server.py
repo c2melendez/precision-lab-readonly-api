@@ -6,7 +6,14 @@ GET requests through integrations.read_only_client.
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import Any, Literal
+
+# Support both "python -m integrations.mcp_server" and launching this file by
+# absolute path from a desktop MCP host whose working directory is elsewhere.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from mcp.server.fastmcp import FastMCP
 
