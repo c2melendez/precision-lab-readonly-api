@@ -310,8 +310,7 @@
           "type": "string"
         },
         "detail": {
-          "type": "string",
-          "xNullable": true
+          "type": "string"
         },
         "read_only": {
           "type": "boolean",
