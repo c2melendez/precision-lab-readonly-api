@@ -135,6 +135,8 @@ def test_api_base_url_must_be_https_and_must_not_embed_credentials():
         ReadOnlyApiClient(base_url="http://example.test", api_key="key")
     with pytest.raises(ValueError, match="credentials"):
         ReadOnlyApiClient(base_url="https://user:pass@precision-lab-readonly-api.onrender.com", api_key="key")
+    with pytest.raises(ValueError, match="default HTTPS port"):
+        ReadOnlyApiClient(base_url="https://precision-lab-readonly-api.onrender.com:8443", api_key="key")
 
 
 def test_function_schemas_are_available_for_openai_compatible_and_gemini_hosts():
