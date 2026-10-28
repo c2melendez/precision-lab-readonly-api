@@ -33,6 +33,12 @@ def parse_base_url(value: str) -> str:
         raise ValueError("Base URL must not include credentials, query parameters, or a fragment.")
     if parsed.path not in ("", "/"):
         raise ValueError("Base URL must be the HTTPS origin only, without a path prefix.")
+    try:
+        port = parsed.port
+    except ValueError:
+        raise ValueError("Base URL contains an invalid port.") from None
+    if port not in (None, 443):
+        raise ValueError("Base URL must use the default HTTPS port.")
     trusted_host = (parsed.hostname or "").lower() == "precision-lab-readonly-api.onrender.com"
     custom_host_opt_in = os.getenv("PRECISION_LAB_ALLOW_CUSTOM_BASE_URL", "").lower() == "true"
     if not trusted_host and not custom_host_opt_in:
