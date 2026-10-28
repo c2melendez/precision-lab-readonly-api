@@ -6,6 +6,17 @@
 
 Servicio HTTP para que un GPT personalizado consulte el estado de Precision Lab Lite/Plus sin recibir credenciales de GitHub ni permisos para ejecutar operaciones. No se conecta a los productos como aplicación matemática y no modifica los repositorios.
 
+### Compatibilidad con múltiples LLM y clientes
+
+La API **no requiere GPT Actions para ejecutarse**: sigue siendo una API REST de solo lectura. Puedes consultarla con cualquier cliente HTTP autorizado; GPT Actions es solo una de las opciones de integración. Este repositorio añade un adaptador local MCP (stdio), esquemas de function calling para hosts compatibles y un contrato Swagger 2.0 para Copilot Studio. La aplicación que integra un modelo es quien ejecuta las llamadas a herramientas; un modelo en una interfaz de chat sin acceso HTTP/herramientas no puede conectarse solo por indicárselo en el prompt.
+
+- Matriz de productos, capacidades y límites: [docs/LLM_CLIENT_COMPATIBILITY.md](docs/LLM_CLIENT_COMPATIBILITY.md)
+- Batería ampliada multi-cliente: [docs/LLM_INTEGRATION_TEST_BATTERY_V2.md](docs/LLM_INTEGRATION_TEST_BATTERY_V2.md)
+- Configuración de adaptadores: [integrations/README.md](integrations/README.md)
+
+El adaptador MCP y sus dependencias están en `requirements-dev.txt`; no se añaden a las dependencias del servicio de Render. No se han cambiado el despliegue, la API de producción ni su configuración de secretos.
+
+
 ## Rutas
 
 | Método | Ruta | Función |
