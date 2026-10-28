@@ -56,6 +56,20 @@ Después de ese resumen también se:
 
 Estos cambios posteriores **no están cubiertos por un test ejecutado**. Las dos corridas anteriores terminaron antes de ejecutar ningún paso y preceden a los últimos cambios de esquema y pruebas. Para evitar nuevos intentos push redundantes, se desactivaron los triggers automáticos `push`; el workflow conserva los disparadores `pull_request` y `workflow_dispatch`.
 
+## Revisión de resultados multi-LLM (2026-10-28)
+
+Se revisaron los ocho informes guardados en `main/tests/`. La conclusión es **evidencia parcial; ninguna integración autenticada certificada**. `Grok.json` y el informe atribuido al archivo `Qwen Coder.json` reportan sondas HTTPS públicas; los demás no obtienen respuestas autenticadas. Ningún informe determina el estado real de Lite/Plus ni valida un plan de gate o evidencia de run autenticados.
+
+Hallazgos de calidad importantes:
+- `Qwen Coder.json` identifica el modelo como Claude/Anthropic, por lo que la atribución a Qwen no está demostrada.
+- El mismo informe registra una sonda `POST` aunque el prompt prohibía usar métodos distintos de GET; se clasifica como desviación del protocolo y no debe repetirse.
+- El recuento `PASS=8` del resumen no coincide con los diez IDs que enumera como ejecutados en PASS al contar sus subpruebas.
+- `scripts/verify_live_api.py` y `integrations/read_only_client.py` están en esta rama de adaptación, no en `main`; una sesión que no cargue la rama no podrá ejecutar esos archivos.
+
+Informe consolidado: [LLM_MULTI_CLIENT_RESULTS_REVIEW_2026-10-28.md](LLM_MULTI_CLIENT_RESULTS_REVIEW_2026-10-28.md).
+
+Las respuestas HTTP 401 informadas sin clave solo confirman el control de acceso anónimo. No validan credenciales, gates, runs, estados internos, function calling, MCP ni conectores. No declarar PASS global ni FAIL del servicio a partir de estos resultados.
+
 ## Próximos pasos
 
 1. Cuando GitHub Actions pueda asignar un runner, ejecutar el workflow \`LLM read-only adapter tests\`; confirmar que se ejecutan checkout, instalación y pytest en Python 3.11 y 3.12.
