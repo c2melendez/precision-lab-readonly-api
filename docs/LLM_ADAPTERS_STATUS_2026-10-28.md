@@ -41,6 +41,17 @@ Una actualización posterior del verificador cambió los IDs de su registro para
 
 La segunda evidencia reproduce el mismo fallo previo a los pasos. No se harán más pushes que activen esta matriz ni reintentos manuales hasta disponer de una causa o de capacidad de runner confirmada.
 
+## Cambios posteriores a las dos corridas
+
+Después del segundo fallo pre-ejecución, la rama se amplió sin volver a lanzar pruebas:
+- Se separaron los esquemas de herramientas de formato Chat Completions (anidado), Responses API (plano) y Gemini (declaraciones).
+- Se retiraron palabras clave de JSON Schema de soporte desigual en los esquemas portables; la validación de argumentos permanece estricta en el ejecutor.
+- Se actualizaron los tests para comprobar los formatos anidados y planos.
+- La batería ahora separa Meta Model API, Meta AI Connectors en vista previa y la aplicación Meta AI sin conector.
+- El verificador REST usa el prefijo `LV-Txx` para evitar colisiones con los IDs de la batería `Txx`.
+
+Estos cambios posteriores **no están cubiertos por un test ejecutado**. Las dos corridas anteriores terminaron antes de ejecutar ningún paso. Para evitar nuevos intentos push redundantes, se desactivaron los triggers automáticos `push`; el workflow conserva los disparadores `pull_request` y `workflow_dispatch`.
+
 ## Próximos pasos
 
 1. Cuando GitHub Actions pueda asignar un runner, ejecutar el workflow \`LLM read-only adapter tests\`; confirmar que se ejecutan checkout, instalación y pytest en Python 3.11 y 3.12.
