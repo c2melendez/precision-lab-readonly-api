@@ -106,6 +106,13 @@ class ReadOnlyApiClient:
             raise ValueError("API base URL must not contain credentials, a query, or a fragment.")
         if parsed.path not in ("", "/"):
             raise ValueError("API base URL must be the service origin, without a path prefix.")
+        trusted_host = (parsed.hostname or "").lower() == "precision-lab-readonly-api.onrender.com"
+        custom_host_opt_in = os.getenv("PRECISION_LAB_ALLOW_CUSTOM_BASE_URL", "").lower() == "true"
+        if not trusted_host and not custom_host_opt_in:
+            raise ValueError(
+                "API host is not allowlisted. Custom HTTPS hosts require explicit operator opt-in "
+                "via PRECISION_LAB_ALLOW_CUSTOM_BASE_URL=true."
+            )
         key = api_key.strip()
         if not key:
             raise ValueError("API key is missing. Set SERVICE_API_KEY in the tool host environment.")
@@ -201,13 +208,33 @@ def openai_compatible_tool_schemas() -> list[dict[str, Any]]:
     ]
 
 
+def _gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Remove JSON-Schema keywords outside Gemini's portable function-schema subset."""
+    portable = {"type", "description", "properties", "required", "enum", "items", "nullable", "format"}
+    result: dict[str, Any] = {}
+    for key, value in schema.items():
+        if key not in portable:
+            continue
+        if key == "properties" and isinstance(value, dict):
+            result[key] = {
+                name: _gemini_schema(prop)
+                for name, prop in value.items()
+                if isinstance(prop, dict)
+            }
+        elif key == "items" and isinstance(value, dict):
+            result[key] = _gemini_schema(value)
+        else:
+            result[key] = value
+    return result
+
+
 def gemini_function_declarations() -> list[dict[str, Any]]:
-    """Return function declarations accepted by the Gemini API's function-calling tools."""
+    """Return Gemini function declarations using a conservative portable schema subset."""
     return [
         {
             "name": tool["name"],
             "description": tool["description"],
-            "parameters": tool["parameters"],
+            "parameters": _gemini_schema(tool["parameters"]),
         }
         for tool in TOOL_SCHEMAS
     ]
