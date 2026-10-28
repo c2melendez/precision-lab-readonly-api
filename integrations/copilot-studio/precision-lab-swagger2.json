@@ -1,0 +1,325 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Precision Lab Certification Read-only API",
+    "version": "0.1.0",
+    "description": "Read-only observation of Precision Lab Lite/Plus continuity, gate planning and GitHub Actions evidence. GET only. A gate plan is advisory; the service never dispatches, cancels, reruns, publishes, pushes or mutates certification resources."
+  },
+  "host": "precision-lab-readonly-api.onrender.com",
+  "basePath": "/",
+  "schemes": [
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "securityDefinitions": {
+    "APIKeyHeader": {
+      "type": "apiKey",
+      "name": "X-API-Key",
+      "in": "header",
+      "description": "Service API key. Configure as a secure connector secret; never include it in prompts."
+    }
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Public service liveness",
+        "operationId": "getHealthz",
+        "description": "Public liveness check only; it does not query GitHub or expose configuration.",
+        "responses": {
+          "200": {
+            "description": "Service is alive",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "example": "ok"
+                },
+                "service": {
+                  "type": "string",
+                  "example": "precision-lab-readonly-api"
+                },
+                "read_only": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/status": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "Read Lite/Plus continuity status",
+        "operationId": "getPrecisionLabStatus",
+        "description": "Read live branch pointers, continuity state, blockers, runner version and latest runner record. Does not execute work.",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "lite",
+              "plus",
+              "both"
+            ],
+            "default": "both",
+            "description": "Repository alias to inspect."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only repository status",
+            "schema": {
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "409": {
+            "description": "Continuity reconciliation required",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "502": {
+            "description": "Incomplete upstream evidence",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service or upstream credentials unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/v1/gates/{gate}/plan": {
+      "get": {
+        "tags": [
+          "Planning"
+        ],
+        "summary": "Read an advisory gate plan",
+        "operationId": "getPrecisionLabGatePlan",
+        "description": "Read-only planner decision. RUN is a recommendation only; action_taken is always false. Never starts a workflow.",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "gate",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9._-]+$",
+            "description": "Exact gate ID grounded in status or trusted repository evidence; do not guess IDs."
+          },
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "type": "string",
+            "enum": [
+              "lite",
+              "plus"
+            ],
+            "description": "Repository alias."
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "type": "boolean",
+            "default": true,
+            "description": "Compatibility parameter; this implementation always reads fresh GitHub data."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only plan",
+            "schema": {
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Unknown or policy-blocked gate",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "409": {
+            "description": "Continuity reconciliation required",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "422": {
+            "description": "Invalid parameters",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "502": {
+            "description": "Incomplete source evidence",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service or upstream credentials unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "Runs"
+        ],
+        "summary": "Read GitHub Actions run evidence",
+        "operationId": "getPrecisionLabRunEvidence",
+        "description": "Read run jobs, steps and related runner record where available. A successful run is raw evidence, never automatic certification PASS.",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20,
+            "pattern": "^[0-9]+$",
+            "description": "Exact numeric GitHub Actions run ID."
+          },
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "type": "string",
+            "enum": [
+              "lite",
+              "plus"
+            ],
+            "description": "Repository alias."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Raw read-only workflow evidence",
+            "schema": {
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid run ID",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Run not found in the selected repository",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "409": {
+            "description": "Continuity reconciliation required",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "422": {
+            "description": "Invalid parameters",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "502": {
+            "description": "Incomplete upstream evidence",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service or upstream credentials unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "ErrorResponse": {
+      "type": "object",
+      "required": [
+        "error",
+        "read_only"
+      ],
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string",
+          "xNullable": true
+        },
+        "read_only": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        }
+      }
+    }
+  }
+}
