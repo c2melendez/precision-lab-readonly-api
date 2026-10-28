@@ -102,11 +102,19 @@ Official docs:
 - https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/configure-mcp-servers  
 - https://code.visualstudio.com/docs/agents/reference/mcp-configuration
 
-### Meta AI / Llama
+### Meta AI, Meta Model API and Llama
 
-- The compatibility checked here does **not** establish a consumer Meta AI chat interface that accepts an arbitrary user-defined REST API or MCP server. Do not treat "Meta AI" and a custom application built with a Llama model as equivalent.
-- If using a Meta/Llama developer API or a self-hosted model that exposes tool/function calling, the host application must implement the HTTP executor with the same safety rules. Validate the exact API/product and model version first.
-- Until that separate integration exists and is tested, record consumer Meta AI direct access as `NOT VERIFIED / NO CUSTOM TOOL CHANNEL ESTABLISHED`, not as PASS or a permanent claim that no such feature could exist.
+These are separate execution profiles and must not share one status.
+
+- **Meta Model API / Muse:** the current developer documentation describes function calling for Chat Completions and a flat tool format for Responses API. The host application executes developer-defined functions and sends their result back to the model. Use `openai_compatible_tool_schemas()` for the documented Chat Completions shape or `responses_api_tool_schemas()` for a flat Responses-style shape, with `execute_readonly_tool()` as the executor. Actual API compatibility remains pending until tested with a valid Meta Model API credential and model.
+- **Meta AI Connectors for Meta AI app/web and AI glasses:** the official connectors page currently describes a limited developer preview, with selection in waves, guided REST/MCP onboarding and OAuth account linking. It says preview connectors are not yet publicly available. Therefore the exact consumer surface is not "unsupported", but connector deployment is `BLOCKED / PENDING ACCESS` until Meta grants preview access and the required authentication contract is reconciled. Do not pass the shared `X-API-Key` into a prompt or hardcode it in a connector. Determine whether the preview accepts this service's authentication or whether an OAuth-secured gateway is needed.
+- **Self-hosted Llama / custom application:** use the provider's supported tool-call format and a trusted host executor. The model does not perform arbitrary API calls on its own.
+- **Meta AI chat without an enabled connector:** do not expect an arbitrary REST API to be callable from a prompt alone.
+
+Official docs:
+- Meta Model API tool/function calling: https://dev.meta.ai/docs/cookbook/tool-function-calling
+- Meta AI Connectors (developer preview): https://dev.meta.ai/products/connectors
+- Llama tool calling background: https://dev.meta.ai/llama/resources/cookbook/toolcalling-with-llama
 
 ## Secret handling
 
