@@ -8,16 +8,8 @@ on:
       - "scripts/verify_live_api.py"
       - "requirements*.txt"
       - ".github/workflows/llm-adapter-tests.yml"
-  push:
-    branches:
-      - main
-      - "feat/multi-llm-readonly-adapters"
-    paths:
-      - "integrations/**"
-      - "tests/**"
-      - "scripts/verify_live_api.py"
-      - "requirements*.txt"
-      - ".github/workflows/llm-adapter-tests.yml"
+  # Push-triggered runs are intentionally disabled while the repository's
+  # runner-allocation issue is unresolved. Use pull_request or workflow_dispatch.
   workflow_dispatch:
 
 permissions:
