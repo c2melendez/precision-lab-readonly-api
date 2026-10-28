@@ -217,6 +217,9 @@ def execute_readonly_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any
     """Execute one allowlisted tool. No caller-controlled URL or HTTP method exists."""
     if not isinstance(arguments, dict):
         raise ValueError("Tool arguments must be a JSON object.")
+    allowed = {"precision_lab_status", "precision_lab_gate_plan", "precision_lab_run_evidence"}
+    if name not in allowed:
+        raise ValueError(f"Unknown read-only tool: {name}")
     with ReadOnlyApiClient.from_environment() as client:
         if name == "precision_lab_status":
             return client.status(arguments.get("repo", "both"))
@@ -231,4 +234,3 @@ def execute_readonly_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any
                 repo=arguments.get("repo"),
                 run_id=str(arguments.get("run_id", "")),
             )
-    raise ValueError(f"Unknown read-only tool: {name}")
