@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from typing import Any
@@ -32,6 +33,13 @@ def parse_base_url(value: str) -> str:
         raise ValueError("Base URL must not include credentials, query parameters, or a fragment.")
     if parsed.path not in ("", "/"):
         raise ValueError("Base URL must be the HTTPS origin only, without a path prefix.")
+    trusted_host = (parsed.hostname or "").lower() == "precision-lab-readonly-api.onrender.com"
+    custom_host_opt_in = os.getenv("PRECISION_LAB_ALLOW_CUSTOM_BASE_URL", "").lower() == "true"
+    if not trusted_host and not custom_host_opt_in:
+        raise ValueError(
+            "API host is not allowlisted. Custom HTTPS hosts require explicit operator opt-in "
+            "via PRECISION_LAB_ALLOW_CUSTOM_BASE_URL=true."
+        )
     return f"https://{parsed.netloc}"
 
 
@@ -163,6 +171,9 @@ def run_verification(
             ]:
                 if not gate:
                     records.append(result(test_id, "PENDING", f"Supply an exact, already-grounded {repo.upper()} gate id to run this optional read-only plan test; the script does not guess gate ids."))
+                    continue
+                if not re.fullmatch(r"[A-Za-z0-9._-]{1,100}", gate):
+                    records.append(result(test_id, "FAIL", "Invalid gate ID syntax; no network request was sent."))
                     continue
                 code, body, error = request_json(
                     authenticated, f"/v1/gates/{gate}/plan", api_key=api_key.strip(),
