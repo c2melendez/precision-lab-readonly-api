@@ -1,0 +1,57 @@
+{
+"informe": "Bateria multi-LLM Precision Lab v2 - Verificacion en vivo (prefijo LV-Txx)",
+"evaluador": {
+"producto_cliente": "Agente de codigo con sandbox Linux (terminal persistente)",
+"modelo": "Claude (Anthropic), version exacta no expuesta por el entorno",
+"perfil_ejecucion": "Ruta 1: REST/HTTP directo con curl + Python 3.12.10 como ejecutor real; host de confianza local para function calling (ruta 4, sin proveedor LLM externo)",
+"fecha_informe_utc": "2026-10-28T05:57:00Z"
+},
+"paso_1_capacidades_reales_de_la_sesion": {
+"cliente_http_terminal": {"disponible": true, "evidencia": "curl, wget, git, jq y Python presentes; red HTTPS verificada"},
+"gpt_action_configurada": {"disponible": false, "nota": "Sesion no es una GPT con Action vinculada"},
+"cliente_mcp_stdio": {"disponible": false, "evidencia": "No existe integrations/mcp_server.py ni paquete 'mcp' instalado"},
+"api_desarrolladorProveedor_host_propio": {"parcial": true, "nota": "Host propio disponible, pero sin credenciales de modelo para cerrar loop real"},
+"conector_producto": {"disponible": false, "nota": "Sin acceso a Copilot Studio ni Meta AI Connectors"},
+"solo_chat_texto": false
+},
+"ruta_seleccionada": "Paso 2, opcion 1 (REST/HTTP directo). Las llamadas las ejecuta el cliente HTTP.",
+"paso_3_credenciales": {
+"SERVICE_API_KEY_en_entorno": false,
+"verificacion": "env | grep ... -> sin coincidencias",
+"medidas": ["No se pidio clave al usuario", "GITHUB_READ_TOKEN intocado", "Sin fuerza bruta", "Escaneo final sin fugas"],
+"consecuencia": "Pruebas autenticadas BLOCKED; solo comprobaciones publicas GET"
+},
+"hallazgos_de_descubrimiento": {
+"nota": "Contrato publicado difiere de endpoints presupuestados",
+"endpoints_reales_openapi_3_1_0": ["GET /healthz", "GET /v1/status", "GET /v1/gates/{gate}/plan", "GET /v1/runs/{run_id}"],
+"esquema_autenticacion": "apiKey en header 'X-API-Key'",
+"servidor": "https://precision-lab-readonly-api.onrender.com",
+"title_version": "Precision Lab Certification Read-only API v0.1.0",
+"implicacion": "Scripts e integraciones mencionadas en el prompt no existen en este workspace"
+},
+"pruebas": [
+{"id": "LV-T01", "nombre": "Liveness publica GET /healthz", "estado": "PASS", "ejecutado": "curl GET /healthz", "utc_inicio": "2026-10-28T05:55:29Z", "http_code": 200, "respuesta": {"status": "ok", "read_only": true}},
+{"id": "LV-T02", "nombre": "GET /v1/status sin credencial (rechazo 401)", "estado": "PASS", "ejecutado": "curl GET /v1/status sin header", "utc_inicio": "2026-10-28T05:55:46Z", "http_code": 401, "interpretacion": "Demuestra rechazo de peticion anonima; no indica servicio averiado"},
+{"id": "LV-T03", "nombre": "GET /v1/status autenticado", "estado": "BLOCKED", "causa": "SERVICE_API_KEY no disponible"},
+{"id": "LV-T04", "nombre": "GET /v1/gates/{gate}/plan autenticado", "estado": "BLOCKED", "causa": "Sin clave y sin gate valido identificado -> PENDING"},
+{"id": "LV-T05", "nombre": "GET /v1/runs/{run_id} autenticado", "estado": "BLOCKED", "causa": "Sin clave y sin run ID real conocido"},
+{"id": "LV-T06", "nombre": "Function calling end-to-end con modelo real", "estado": "NOT VERIFIED", "causa": "Sin credenciales de proveedor de modelos", "subpruebas": [{"id": "LV-T06a", "nombre": "Generacion esquemas desde OpenAPI", "estado": "PASS"}, {"id": "LV-T06c", "nombre": "Round-trip host sobre healthz", "estado": "PASS"}, {"id": "LV-T06d", "nombre": "Round-trip host sobre status (sin clave)", "estado": "BLOCKED"}, {"id": "LV-T06e", "nombre": "Validacion negativa del host", "estado": "PASS"}]},
+{"id": "LV-T07", "nombre": "Validacion de esquemas OpenAPI vs cuerpos reales", "estado": "PASS", "ejecutado": "Python jsonschema Draft 2020-12", "nota": "Inconsistencia menor detectada en GatePlanResponse.gate.action_taken"},
+{"id": "LV-T08", "nombre": "MCP local stdio", "estado": "BLOCKED", "causa": "Archivo ausente y sin cliente MCP"},
+{"id": "LV-T09", "nombre": "GET /v1/gates/{gate}/plan sin clave", "estado": "PASS", "ejecutado": "curl GET con marcador invalido", "http_code": 401},
+{"id": "LV-T10", "nombre": "GET /v1/runs/{run_id} sin clave", "estado": "PASS", "ejecutado": "curl GET", "http_code": 401},
+{"id": "LV-T11", "nombre": "Postura de solo lectura: POST rechazado", "estado": "PASS", "ejecutado": "curl -X POST /v1/status", "http_code": 405, "nota_transparencia": "Unica sonda POST no-idempotente para verificar garantia read-only; sin efecto"},
+{"id": "LV-T12", "nombre": "Verificador scripts/verify_live_api.py", "estado": "BLOCKED", "causa": "Archivos ausentes en repo vacio"},
+{"id": "LV-T13", "nombre": "Conectores de producto", "estado": "N/A", "causa": "Entorno no soporta canales de conector"},
+{"id": "LV-T14", "nombre": "Latencia de arranque (cold start)", "estado": "PASS", "detalle": "Primera peticion 21.6s; subsiguientes <2s"}
+],
+"resumen_estados": {"PASS": 8, "FAIL": 0, "BLOCKED": 6, "NOT_VERIFIED": 1, "PENDING": 0, "N/A": 1},
+"entrega_final": {
+"1_pruebas_ejecutadas": ["LV-T01", "LV-T02", "LV-T06a", "LV-T06c", "LV-T06e", "LV-T07", "LV-T09", "LV-T10", "LV-T11", "LV-T14"],
+"2_pruebas_bloqueadas_y_causa": [{"ids": ["LV-T03", "LV-T04", "LV-T05", "LV-T06d"], "causa": "Falta SERVICE_API_KEY"}, {"ids": ["LV-T08", "LV-T12"], "causa": "Archivos/scripts ausentes"}],
+"3_limitaciones_especificas_del_producto": ["Sesion terminal, no GPT Action", "Sin credenciales de modelo para loop real", "Cold start alto (21s)", "Posible bug menor de contrato"],
+"4_estado_real_conocido_lite_plus_y_desconocidos": {"lite_plus_estado": "DESCONOCIDO", "planes_gate": "PENDING", "desconocido_ademas": ["current_head_sha", "runner version", "latest run IDs", "Compass Bridge"]},
+"5_siguiente_paso_sin_repetir_trabajo": "Proveer SERVICE_API_KEY al entorno seguro y reintentar LV-T03/T04/T05. Restaurar repo para habilitar LV-T08/T12.",
+"6_declARACION_escritura_dispatch": "NO hubo escritura alguna. Cero POST con efecto, cero commits/pushes/dispatch. Todas las demas fueron GET."
+}
+}

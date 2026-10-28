@@ -1,0 +1,136 @@
+{
+  "informe": {
+    "sesion": {
+      "tipo": "solo_chat_de_texto",
+      "herramientas_externas_ejecutables": false,
+      "resultado_global": "BLOCKED",
+      "fecha_utc": null,
+      "nota": "No se ejecutó ninguna petición real; toda conclusión sobre la API es razonamiento, no PASS de integración."
+    },
+    "paso_1_capacidades_reales": {
+      "cliente_http_o_terminal": false,
+      "gpt_action_configurada": false,
+      "cliente_mcp_local_stdio": false,
+      "api_desarrollador_con_host_de_herramientas": false,
+      "conector_de_producto": false,
+      "solo_chat_texto_sin_herramientas": true
+    },
+    "paso_2_ruta_elegida": {
+      "canal_disponible": null,
+      "ruta_seleccionada": "ninguna",
+      "motivo": "No existe canal ejecutable autorizado en esta sesión; se marca BLOCKED sin simular peticiones."
+    },
+    "paso_3_credenciales": {
+      "service_api_key_solicitada": false,
+      "service_api_key_accedida": false,
+      "github_read_token_accedido": false,
+      "fuerza_bruta_o_prueba_de_gates": false,
+      "credenciales_en_prompts_o_registros": false
+    },
+    "paso_4_pruebas": [
+      {
+        "id": "A",
+        "nombre": "Terminal y Python / scripts/verify_live_api.py",
+        "producto_cliente": "Chat de texto sin terminal",
+        "version_modelo": null,
+        "perfil_ejecucion": "solo_chat",
+        "estado": "BLOCKED",
+        "ejecutado_realmente": false,
+        "hora_utc": null,
+        "codigo_http": null,
+        "referencia_evidencia": null,
+        "json_respuesta_real": null,
+        "dependencia_pendiente": "Ejecutor con terminal/Python y SERVICE_API_KEY en entorno seguro",
+        "siguiente_paso": "Ejecutar python scripts/verify_live_api.py desde entorno autorizado"
+      },
+      {
+        "id": "B",
+        "nombre": "MCP local stdio (integrations/mcp_server.py)",
+        "producto_cliente": "Chat de texto sin MCP",
+        "version_modelo": null,
+        "perfil_ejecucion": "solo_chat",
+        "estado": "BLOCKED",
+        "ejecutado_realmente": false,
+        "hora_utc": null,
+        "codigo_http": null,
+        "referencia_evidencia": null,
+        "json_respuesta_real": null,
+        "dependencia_pendiente": "Cliente con soporte MCP local stdio y entorno seguro para la clave",
+        "siguiente_paso": "Configurar cliente MCP stdio y ejecutar precision_lab_status / gate_plan / run_evidence"
+      },
+      {
+        "id": "C",
+        "nombre": "APIs de modelos / function calling",
+        "producto_cliente": "Chat de texto sin API de desarrollador con host",
+        "version_modelo": null,
+        "perfil_ejecucion": "solo_chat",
+        "estado": "BLOCKED",
+        "ejecutado_realmente": false,
+        "hora_utc": null,
+        "codigo_http": null,
+        "referencia_evidencia": null,
+        "json_respuesta_real": null,
+        "dependencia_pendiente": "Endpoint de modelo con tool schemas y host que ejecute execute_readonly_tool",
+        "siguiente_paso": "Declarar esquema según proveedor, recibir tool call y ejecutar función en host de confianza"
+      },
+      {
+        "id": "D",
+        "nombre": "Conectores de producto (GPT Actions / Copilot Studio / Meta AI Connectors)",
+        "producto_cliente": "Chat de texto sin conector activado",
+        "version_modelo": null,
+        "perfil_ejecucion": "solo_chat",
+        "estado": "BLOCKED",
+        "ejecutado_realmente": false,
+        "hora_utc": null,
+        "codigo_http": null,
+        "referencia_evidencia": null,
+        "json_respuesta_real": null,
+        "dependencia_pendiente": "Conector del producto configurado con autenticación y operaciones GET habilitadas",
+        "siguiente_paso": "Configurar GPT Action, Copilot Studio (X-API-Key) o Meta AI Connector autorizado y ejecutar llamada real"
+      },
+      {
+        "id": "E",
+        "nombre": "Comprobaciones públicas REST",
+        "producto_cliente": "Chat de texto sin cliente HTTP",
+        "version_modelo": null,
+        "perfil_ejecucion": "solo_chat",
+        "estado": "BLOCKED",
+        "ejecutado_realmente": false,
+        "hora_utc": null,
+        "codigo_http": null,
+        "referencia_evidencia": null,
+        "json_respuesta_real": null,
+        "dependencia_pendiente": "Cliente HTTP/terminal",
+        "siguiente_paso": "Ejecutar GET público desde entorno con cliente HTTP"
+      }
+    ],
+    "paso_5_interpretacion": {
+      "run_es_dispatch_github_actions": false,
+      "http_200_equivale_certificacion": false,
+      "run_exitoso_equivale_pass_certificacion": false,
+      "http_401_demuestra_servicio_averiado": false,
+      "estado_lite_plus_conocido": "desconocido",
+      "json_autenticado_valido_obtenido": false,
+      "escrituras_realizadas": false,
+      "compass_bridge_invocado": false
+    },
+    "cierre": {
+      "pruebas_ejecutadas": [],
+      "pruebas_bloqueadas_y_causa": [
+        { "id": "A", "causa": "Sin terminal/Python ni SERVICE_API_KEY accesible en esta sesión" },
+        { "id": "B", "causa": "Sin cliente MCP local stdio" },
+        { "id": "C", "causa": "Sin API de desarrollador ni host de ejecución de funciones" },
+        { "id": "D", "causa": "Sin conector de producto activado ni autenticado" },
+        { "id": "E", "causa": "Sin cliente HTTP" }
+      ],
+      "limitaciones_especificas_producto": "Sesión de solo chat: sin HTTP, terminal, MCP, GPT Actions, API de desarrollador con host, ni conectores de producto.",
+      "estado_real_lite_plus": {
+        "lite": "desconocido",
+        "plus": "desconocido",
+        "datos_desconocidos": "No se obtuvo JSON autenticado válido de estado ni de gate_plan"
+      },
+      "siguiente_paso_sin_repetir_trabajo": "Ejecutar esta batería desde un entorno real con canal autorizado (terminal + SERVICE_API_KEY segura, cliente MCP stdio, endpoint de modelo con host de funciones o conector de producto configurado).",
+      "declaracion_explicita_sin_escritura_ni_dispatch": true
+    }
+  }
+}

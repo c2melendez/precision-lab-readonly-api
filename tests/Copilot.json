@@ -1,0 +1,119 @@
+{
+  "report_type": "LLM_INTEGRATION_TEST_EXECUTION_REPORT",
+  "source_document": {
+    "name": "LLM_MULTI_CLIENT_TEST_PROMPT_V2.md",
+    "reference_id": "turn1search1"
+  },
+  "execution_context": {
+    "product": "M365 Copilot",
+    "model": "GPT-5 chat model",
+    "timestamp_utc": "2026-10-28T05:56:22Z",
+    "profile": "Consumer chat session"
+  },
+  "step_1_capability_assessment": {
+    "http_client_terminal": false,
+    "gpt_action_configured_for_target_api": false,
+    "local_mcp_stdio_client": false,
+    "developer_api_host_with_function_execution": false,
+    "product_connector_for_target_api": false,
+    "text_chat_only": true,
+    "conclusion": "Only text-chat capabilities are available for this task. No authorized execution channel is available for direct interaction with the target API."
+  },
+  "step_2_selected_route": {
+    "route": "NONE",
+    "status": "BLOCKED",
+    "reason": "No executable external tool path is available for validating the Precision Lab API integration."
+  },
+  "credential_handling": {
+    "service_api_key_requested": false,
+    "service_api_key_exposed": false,
+    "github_read_token_requested": false,
+    "credential_policy_compliant": true
+  },
+  "tests": [
+    {
+      "id": "CAP-01",
+      "name": "Execution Channel Verification",
+      "status": "PASS",
+      "executed": true,
+      "details": "Verified available session capabilities and determined that no external API execution channel is present.",
+      "evidence": "Capability assessment performed from current chat environment."
+    },
+    {
+      "id": "API-01",
+      "name": "Precision Lab Status Endpoint Validation",
+      "status": "BLOCKED",
+      "executed": false,
+      "http_code": null,
+      "details": "No authorized HTTP execution channel available.",
+      "dependency": "HTTP client or configured integration."
+    },
+    {
+      "id": "API-02",
+      "name": "Authenticated Read-Only API Validation",
+      "status": "BLOCKED",
+      "executed": false,
+      "http_code": null,
+      "details": "Secure SERVICE_API_KEY is not accessible in this environment and no authorized executor is available.",
+      "dependency": "Secure runtime with stored credentials."
+    },
+    {
+      "id": "MCP-01",
+      "name": "Local MCP Server Validation",
+      "status": "BLOCKED",
+      "executed": false,
+      "details": "Current environment cannot launch or connect to a local MCP stdio process.",
+      "dependency": "Compatible MCP client."
+    },
+    {
+      "id": "FUNC-01",
+      "name": "Developer API Function-Calling Validation",
+      "status": "BLOCKED",
+      "executed": false,
+      "details": "No developer API host or tool-execution runtime is available in this chat session.",
+      "dependency": "External execution host."
+    },
+    {
+      "id": "CONN-01",
+      "name": "Product Connector Validation",
+      "status": "BLOCKED",
+      "executed": false,
+      "details": "No Precision Lab connector has been configured or exposed to this session.",
+      "dependency": "Configured connector integration."
+    }
+  ],
+  "real_execution_evidence": [],
+  "api_responses": [],
+  "known_lite_plus_state": {
+    "lite": "UNKNOWN",
+    "plus": "UNKNOWN",
+    "evidence": "No authenticated API response obtained."
+  },
+  "summary": {
+    "executed_tests": [
+      "CAP-01"
+    ],
+    "blocked_tests": [
+      "API-01",
+      "API-02",
+      "MCP-01",
+      "FUNC-01",
+      "CONN-01"
+    ],
+    "blocked_reason": "No authorized external execution mechanism is available in the current session.",
+    "limitations": [
+      "Cannot perform HTTP requests to the target API through an authorized runtime.",
+      "Cannot access secure environment variables.",
+      "Cannot launch local MCP processes.",
+      "Cannot validate connector configurations not exposed to the session."
+    ],
+    "next_step": "Run the test battery from an environment with an actual HTTP client, configured connector, MCP client, or developer-hosted tool executor containing SERVICE_API_KEY in secure storage.",
+    "no_write_operations_performed": true,
+    "no_dispatch_operations_performed": true
+  },
+  "compliance_statement": {
+    "integration_verified": false,
+    "simulated_results_used": false,
+    "pass_claims_limited_to_observed_execution": true
+  }
+}

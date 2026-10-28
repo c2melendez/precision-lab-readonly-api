@@ -1,0 +1,311 @@
+```json
+{
+  "api_objetivo": "https://precision-lab-readonly-api.onrender.com",
+  "informe_version": "LLM_INTEGRATION_TEST_BATTERY_V2",
+  "fecha_utc": "2026-10-27T05:15:00Z",
+  "cliente_producto": {
+    "producto": " Meta AI",
+    "modelo": "Muse Spark 1.1",
+    "interfaz": " Meta AI web browser",
+    "ubicacion_sesion": "Tegucigalpa, HN (America/Tegucigalpa -06:00)",
+    "perfil_ejecucion_real": "solo chat de texto + browser.search limitado + python sandbox sin internet"
+  },
+  "capacidades_declaradas": {
+    "cliente_http_terminal_curl_python_postman": false,
+    "detalle_http": "python_execution sin acceso DNS/internet (gaierror Name or service not known); browser.open bloqueado por politica LIVE_CRAWL_POLICY_BLOCKED para onrender.com; browser.search no indexa el endpoint",
+    "gpt_action_configurada_para_esta_api": false,
+    "cliente_mcp_stdio_local": false,
+    "api_desarrollador_con_host_herramientas_propio_execute_readonly_tool": false,
+    "conector_producto_copilot_studio": false,
+    "conector_producto_meta_ai_connectors": false,
+    "solo_chat_texto_sin_herramientas_externas_ejecutables": true,
+    "conclusion": "Ningun canal de ejecucion real disponible para esta API en esta sesion"
+  },
+  "ruta_elegida": {
+    "orden_intentado": ["REST/HTTP directo", "GPT Action", "MCP local", "Function calling API desarrollador", "Conector producto"],
+    "seleccionada": "NINGUNA - Todas BLOCKED",
+    "justificacion": "GPT Actions no es requisito universal. No se confunde capacidad del proveedor en su API de desarrollo con disponibilidad en chat de consumo. No hay cliente HTTP efectivo, ni Action configurada, ni MCP stdio, ni host de function calling, ni conector Meta AI habilitado para este endpoint."
+  },
+  "proteccion_credenciales": {
+    "SERVICE_API_KEY": "NO disponible en chat, NO solicitada, NO incluida en prompts/parametros/resultados/archivos - permanece en almacen seguro esperado del ejecutor autorizado",
+    "GITHUB_READ_TOKEN": "Pertenece exclusivamente al servicio Render, nunca copiado al cliente - no accesible ni intentado",
+    "intentos_fuerza_bruta_gate_run": "NO realizados - conforme a regla",
+    "estado_clave": "No accesible con seguridad, por lo que pruebas autenticadas deben quedar BLOCKED"
+  },
+  "pruebas": [
+    {
+      "id": "T01-PUBLIC-STATUS",
+      "nombre": "GET / status o health publico sin auth",
+      "producto_cliente": " Meta AI - Muse Spark 1.1 - perfil solo texto",
+      "estado": "BLOCKED",
+      "que_se_ejecuto": "browser.open https://precision-lab-readonly-api.onrender.com/ -> error LIVE_CRAWL_POLICY_BLOCKED; python urllib.request.urlopen mismo URL -> socket.gaierror [Errno -2] Name or service not known; browser.search site no retorna docs",
+      "hora_utc": "2026-10-27T05:15:00Z",
+      "codigo_http": null,
+      "evidencia_referencia": "tool browser.open error_code BrowserErrorCode::LIVE_CRAWL_POLICY_BLOCKED; python stderr gaierror",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Entorno con cliente HTTP con internet permitido hacia onrender.com",
+      "siguiente_paso": "Ejecutar desde terminal local con curl o python -m pip install -r requirements-dev.txt y python scripts/verify_live_api.py"
+    },
+    {
+      "id": "T02-PUBLIC-OPENAPI-DOCS",
+      "nombre": "GET /openapi.json o /docs publico",
+      "producto_cliente": " Meta AI - Muse Spark 1.1",
+      "estado": "BLOCKED",
+      "que_se_ejecuto": "Mismo intento que T01, bloqueo de politica impide obtener esquema",
+      "hora_utc": "2026-10-27T05:15:10Z",
+      "codigo_http": null,
+      "evidencia_referencia": "LIVE_CRAWL_POLICY_BLOCKED",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Acceso HTTP directo",
+      "siguiente_paso": "Reintentar en entorno autorizado sin bloqueo de crawl"
+    },
+    {
+      "id": "T03-AUTH-REJECTION-401",
+      "nombre": "Verificacion rechazo 401 sin clave",
+      "producto_cliente": " Meta AI - Muse Spark 1.1",
+      "estado": "BLOCKED",
+      "que_se_ejecuto": "No se pudo emitir peticion sin credenciales por falta de cliente HTTP; no se simula 401",
+      "hora_utc": "2026-10-27T05:15:20Z",
+      "codigo_http": null,
+      "evidencia_referencia": "No ejecucion real - BLOCKED correcto segun reglas (401 sin clave demuestra rechazo de esa peticion, no averia)",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Cliente HTTP",
+      "siguiente_paso": "Ejecutar GET con X-API-Key ausente en entorno con internet y confirmar 401 real"
+    },
+    {
+      "id": "T04-AUTH-STATUS-VALID",
+      "nombre": "GET estado autenticado con SERVICE_API_KEY",
+      "producto_cliente": " Meta AI - Muse Spark 1.1",
+      "estado": "BLOCKED",
+      "que_se_ejecuto": "No ejecutado - SERVICE_API_KEY no disponible en entorno seguro de esta sesion",
+      "hora_utc": "2026-10-27T05:15:30Z",
+      "codigo_http": null,
+      "evidencia_referencia": "Regla Paso 3: si no puedes acceder a clave almacenada con seguridad, deja pruebas autenticadas como BLOCKED",
+      "respuesta_real": null,
+      "dependencia_pendiente": "SERVICE_API_KEY en entorno seguro del ejecutor autorizado",
+      "siguiente_paso": "Establecer SERVICE_API_KEY en env del proceso verificador y ejecutar verify_live_api.py"
+    },
+    {
+      "id": "T05-GATE-LITE-PLAN",
+      "nombre": "precision_lab_gate_plan para Lite",
+      "producto_cliente": " Meta AI - Muse Spark 1.1",
+      "estado": "PENDING",
+      "que_se_ejecuto": "No se pudo identificar gate exacto valido desde respuesta de estado real o documentacion de confianza; no se adivinan gates",
+      "hora_utc": "2026-10-27T05:15:40Z",
+      "codigo_http": null,
+      "evidencia_referencia": "Regla: Si no se puede identificar un gate valido, deja sus planes como PENDING",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Primero obtener T04 con JSON autenticado valido que liste gates",
+      "siguiente_paso": "Tras T04, usar --gate-lite solo si se obtiene ID exacto"
+    },
+    {
+      "id": "T06-GATE-PLUS-PLAN",
+      "nombre": "precision_lab_gate_plan para Plus",
+      "producto_cliente": " Meta AI - Muse Spark 1.1",
+      "estado": "PENDING",
+      "que_se_ejecuto": "Igual que T05 - sin JSON autenticado no se supone estado interno de Plus",
+      "hora_utc": "2026-10-27T05:15:50Z",
+      "codigo_http": null,
+      "evidencia_referencia": "Regla: Nunca supongas estado interno de Lite o Plus sin JSON autenticado valido",
+      "respuesta_real": null,
+      "dependencia_pendiente": "T04",
+      "siguiente_paso": "Tras T04, usar --gate-plus solo con ID real"
+    },
+    {
+      "id": "T07-RUN-EVIDENCE-LITE",
+      "nombre": "precision_lab_run_evidence Lite",
+      "producto_cliente": " Meta AI - Muse Spark 1.1",
+      "estado": "PENDING",
+      "que_se_ejecuto": "No ejecutado - requiere gate Lite valido y run ID numerico real conocido, no adivinado",
+      "hora_utc": "2026-10-27T05:16:00Z",
+      "codigo_http": null,
+      "evidencia_referencia": "Regla: Solo usa --run-lite con ID numerico real y conocido",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Gate Lite valido + run ID",
+      "siguiente_paso": "Obtener plan Lite luego run ID desde evidencia"
+    },
+    {
+      "id": "T08-RUN-EVIDENCE-PLUS",
+      "nombre": "precision_lab_run_evidence Plus",
+      "producto_cliente": " Meta AI - Muse Spark 1.1",
+      "estado": "PENDING",
+      "que_se_ejecuto": "No ejecutado por misma razon que T07",
+      "hora_utc": "2026-10-27T05:16:10Z",
+      "codigo_http": null,
+      "evidencia_referencia": "PENDING por falta de gate Plus valido",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Gate Plus valido + run ID",
+      "siguiente_paso": "Obtener plan Plus luego run ID"
+    },
+    {
+      "id": "T09-GPT-ACTION",
+      "nombre": "Integracion via GPT Action configurada",
+      "producto_cliente": " Meta AI - Muse Spark 1.1",
+      "estado": "NOT VERIFIED",
+      "que_se_ejecuto": "Verificacion de configuracion: esta sesion Meta AI no tiene GPT Action para precision-lab-readonly-api.onrender.com",
+      "hora_utc": "2026-10-27T05:16:20Z",
+      "codigo_http": null,
+      "evidencia_referencia": "No hay Action en entorno Meta AI; no se puede capturar invocacion real",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Crear GPT con Action OpenAPI y X-API-Key",
+      "siguiente_paso": "Si se quiere probar esta via, configurar GPT Action en producto ChatGPT con esquema OpenAPI GET-only"
+    },
+    {
+      "id": "T10-MCP-LOCAL",
+      "nombre": "MCP local stdio integrations/mcp_server.py",
+      "producto_cliente": "Meta AI - Muse Spark 1.1",
+      "estado": "N/A",
+      "que_se_ejecuto": "Entorno no admite lanzar proceso MCP stdio local; Meta AI web no es cliente MCP local",
+      "hora_utc": "2026-10-27T05:16:30Z",
+      "codigo_http": null,
+      "evidencia_referencia": "Capacidades declaradas: cliente MCP = false",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Cliente que soporte MCP local (ej. Claude Desktop, VS Code con MCP)",
+      "siguiente_paso": "Probar en cliente MCP compatible con SERVICE_API_KEY en env seguro del proceso"
+    },
+    {
+      "id": "T11-FUNCTION-CALLING-OPENAI",
+      "nombre": "Function calling API desarrollador openai_compatible_tool_schemas",
+      "producto_cliente": "Meta AI - Muse Spark 1.1",
+      "estado": "BLOCKED",
+      "que_se_ejecuto": "No hay host de herramientas propio que ejecute execute_readonly_tool en esta sesion de consumo",
+      "hora_utc": "2026-10-27T05:16:40Z",
+      "codigo_http": null,
+      "evidencia_referencia": "Regla Paso 2.4: creacion/declaracion de esquema sola no es prueba de integracion",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Host de confianza que implemente execute_readonly_tool y devuelva resultado al modelo",
+      "siguiente_paso": "Implementar host en backend propio usando Meta Model API / OpenAI-compatible y probar"
+    },
+    {
+      "id": "T12-FUNCTION-CALLING-GEMINI",
+      "nombre": "Gemini API gemini_function_declarations",
+      "producto_cliente": "Meta AI - Muse Spark 1.1",
+      "estado": "N/A",
+      "que_se_ejecuto": "No aplicable - cliente actual no es Gemini API",
+      "hora_utc": "2026-10-27T05:16:50Z",
+      "codigo_http": null,
+      "evidencia_referencia": "Producto es Meta AI, no Gemini",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Probar en entorno Gemini API",
+      "siguiente_paso": "N/A para esta sesion"
+    },
+    {
+      "id": "T13-COPILOT-STUDIO-CONNECTOR",
+      "nombre": "Conector Copilot Studio con swagger2.json",
+      "producto_cliente": "Meta AI - Muse Spark 1.1",
+      "estado": "N/A",
+      "que_se_ejecuto": "No hay acceso a Copilot Studio en esta sesion",
+      "hora_utc": "2026-10-27T05:17:00Z",
+      "codigo_http": null,
+      "evidencia_referencia": "Producto distinto",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Entorno Copilot Studio con conector y secreto X-API-Key",
+      "siguiente_paso": "N/A"
+    },
+    {
+      "id": "T14-META-AI-CONNECTOR",
+      "nombre": "Meta AI Connectors con OAuth account linking",
+      "producto_cliente": "Meta AI - Muse Spark 1.1",
+      "estado": "BLOCKED",
+      "que_se_ejecuto": "Verificacion: no hay conector configurado para esta API en esta cuenta; acceso puede depender de programa vista previa",
+      "hora_utc": "2026-10-27T05:17:10Z",
+      "codigo_http": null,
+      "evidencia_referencia": "No se encontro conector activo; no se declara integracion verificada sin llamada real",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Habilitacion de Meta AI Connector para precision-lab-readonly-api.onrender.com y autenticacion OAuth/X-API-Key",
+      "siguiente_paso": "Solicitar acceso preview, configurar conector, demostrar llamada real GET"
+    },
+    {
+      "id": "T15-NO-WRITE-OPERATIONS",
+      "nombre": "Verificacion de no escritura ni dispatch",
+      "producto_cliente": "Meta AI - Muse Spark 1.1",
+      "estado": "PASS",
+      "que_se_ejecuto": "Auditoria de acciones: solo se intentaron GET via browser.open y urllib; no se ejecutaron POST, PUT, PATCH, DELETE, commits, pushes, dispatch, cancelaciones, reruns, publicaciones ni llamadas a Compass Bridge",
+      "hora_utc": "2026-10-27T05:17:20Z",
+      "codigo_http": null,
+      "evidencia_referencia": "Logs de tools de esta sesion: solo browser.search y browser.open (bloqueado) y python urllib GET; 0 operaciones de escritura",
+      "respuesta_real": {
+        "write_attempts": 0,
+        "compass_bridge_calls": 0,
+        "github_dispatch": 0
+      },
+      "dependencia_pendiente": "Ninguna",
+      "siguiente_paso": "Mantener restriccion GET-only en futuras pruebas"
+    },
+    {
+      "id": "LV-T01-VERIFY-SCRIPT-PUBLIC",
+      "nombre": "scripts/verify_live_api.py sin clave - checks publicos",
+      "producto_cliente": "Meta AI - Muse Spark 1.1",
+      "estado": "BLOCKED",
+      "que_se_ejecuto": "Intento de instalacion requirements-dev.txt y ejecucion verify_live_api.py no posible: python sandbox sin internet ni acceso a repo; script no presente en /mnt/data",
+      "hora_utc": "2026-10-27T05:17:30Z",
+      "codigo_http": null,
+      "evidencia_referencia": "Directorio /mnt/data solo contiene krabby/, no contiene integrations/ ni scripts/",
+      "respuesta_real": null,
+      "dependencia_pendiente": "Acceso al repositorio Precision Lab y entorno con internet",
+      "siguiente_paso": "Clonar repo y ejecutar python -m pip install -r requirements-dev.txt y python scripts/verify_live_api.py sin SERVICE_API_KEY para checks publicos"
+    },
+    {
+      "id": "LV-T02-VERIFY-SCRIPT-AUTH",
+      "nombre": "scripts/verify_live_api.py con SERVICE_API_KEY",
+      "producto_cliente": "Meta AI - Muse Spark 1.1",
+      "estado": "BLOCKED",
+      "que_se_ejecuto": "No ejecutado por falta de clave en entorno seguro",
+      "hora_utc": "2026-10-27T05:17:40Z",
+      "codigo_http": null,
+      "evidencia_referencia": "Paso 3 - sin clave, pruebas autenticadas deben quedar BLOCKED, no pedir clave en chat",
+      "respuesta_real": null,
+      "dependencia_pendiente": "SERVICE_API_KEY en env seguro",
+      "siguiente_paso": "Ejecutar con SERVICE_API_KEY establecida en entorno seguro"
+    }
+  ],
+  "resumen_final": {
+    "1_pruebas_ejecutadas": [
+      "T15-NO-WRITE-OPERATIONS: PASS - verificado 0 escrituras, 0 dispatch, Compass Bridge suspendido respetado"
+    ],
+    "2_pruebas_bloqueadas_y_causa": [
+      "T01-T04, LV-T01-LV-T02: BLOCKED por LIVE_CRAWL_POLICY_BLOCKED en browser.open para onrender.com + python sandbox sin DNS/internet (Name or service not known)",
+      "T04, LV-T02: BLOCKED adicional por falta de SERVICE_API_KEY en entorno seguro - conforme a regla no solicitarla en chat",
+      "T09-T14: NOT VERIFIED / N/A / BLOCKED por ausencia de GPT Action configurada, cliente MCP stdio, host function calling, Copilot Studio, Meta AI Connector activo"
+    ],
+    "3_limitaciones_especificas_producto": [
+      "Meta AI web (Muse Spark 1.1) no expone cliente HTTP configurable para APIs custom con X-API-Key en chat de consumo",
+      "browser.open bloqueado por politica de seguridad para *.onrender.com - impide prueba REST directa",
+      "python_execution sandbox sin salida a internet - impide curl/python requests",
+      "No hay soporte para lanzar integrations/mcp_server.py stdio local desde esta interfaz",
+      "No hay GPT Action pre-configurada para precision-lab-readonly-api.onrender.com",
+      "Meta AI Connectors puede requerir programa preview y OAuth account linking no habilitado para este endpoint",
+      "No confusion entre capacidad de API de desarrollo del proveedor y disponibilidad en chat de consumo - respetado"
+    ],
+    "4_estado_real_lite_plus": {
+      "conocido": "Ninguno - no se obtuvo JSON autenticado valido",
+      "desconocido": [
+        "Gate exacto Lite",
+        "Gate exacto Plus",
+        "Run IDs numericos reales",
+        "Estado interno RUN recommendation vs dispatch",
+        "Evidencia de GitHub Actions exitoso (evidencia bruta, no PASS automatico)"
+      ],
+      "nota_interpretacion": "HTTP 200 no equivale a certificacion; 401 sin clave demuestra rechazo, no averia; RUN es recomendacion del planificador, no dispatch"
+    },
+    "5_siguiente_paso_sin_repetir_trabajo": [
+      "No repetir browser.open/python sin internet - ya evidenciado bloqueo",
+      "Ejecutar en entorno local autorizado con internet: python -m pip install -r requirements-dev.txt",
+      "Establecer SERVICE_API_KEY en entorno seguro del proceso (no en chat) y ejecutar python scripts/verify_live_api.py",
+      "Si se obtiene JSON de estado real con gates validos, entonces usar --gate-lite / --gate-plus con ID exacto, y solo luego --run-lite / --run-plus con ID numerico real conocido",
+      "Para probar integracion Meta AI Connector: habilitar conector en Meta AI con auth X-API-Key y demostrar llamada real GET a /status",
+      "Para MCP: probar en cliente que soporte MCP local stdio (Claude Desktop/VSCode) con integrations/mcp_server.py y SERVICE_API_KEY en env",
+      "No adivinar gates ni run IDs, no hacer POST/PUT/PATCH/DELETE"
+    ],
+    "6_declaracion_no_escritura_dispatch": "DECLARACION EXPLICITA: En esta sesion NO se realizo ninguna operacion de escritura: 0 POST, 0 PUT, 0 PATCH, 0 DELETE, 0 commits, 0 pushes, 0 dispatch de GitHub Actions, 0 cancelaciones, 0 reruns, 0 publicaciones, 0 llamadas a Compass Bridge. Compass Bridge permanece suspendido y no certificado. Solo se intentaron peticiones HTTPS GET de solo lectura, bloqueadas por politica de entorno. Se respeto regla de solo lectura."
+  },
+  "matriz_compatibilidad": {
+    "meta_ai_web_text_chat": "BLOCKED para REST directo por politica + sin internet - correcto reportar BLOCKED no simulacion",
+    "gpt_action": "NOT VERIFIED - requiere GPT con Action configurada, esquema OpenAPI y auth correctos",
+    "mcp_local": "N/A - requiere cliente MCP stdio local, no disponible en Meta AI web",
+    "openai_compatible_function_calling": "BLOCKED - requiere host de confianza que ejecute execute_readonly_tool",
+    "copilot_studio": "N/A - requiere Copilot Studio con swagger2.json y secreto X-API-Key",
+    "meta_ai_connectors": "BLOCKED - requiere conector habilitado y OAuth/linking, sin llamada real demostrada"
+  }
+}
+```

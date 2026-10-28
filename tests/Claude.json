@@ -1,0 +1,108 @@
+```json
+{
+  "informe": "Evaluación de integración de solo lectura de Precision Lab (batería multi-LLM v2)",
+  "fecha_utc": "2026-10-28",
+  "hora_utc": "no disponible (no hay reloj fiable en esta sesión)",
+  "cliente": {
+    "producto": "Claude (claude.ai, chat web/móvil)",
+    "modelo": "Claude Sonnet 5.5",
+    "perfil_de_ejecucion": "Chat de consumo con herramienta web_fetch (GET genérico) y sandbox bash sin red"
+  },
+  "paso_1_capacidades_reales": {
+    "cliente_http_terminal": "PARCIAL: bash_tool existe pero con red deshabilitada (Enabled: false). Solo hay web_fetch, un GET genérico que no permite cabeceras personalizadas.",
+    "gpt_action": false,
+    "mcp_local_stdio": false,
+    "function_calling_api_desarrollador": false,
+    "conector_de_producto_copilot_o_meta": false,
+    "solo_chat_texto": false,
+    "acceso_seguro_a_SERVICE_API_KEY": false,
+    "repositorio_disponible": "No. Los archivos scripts/verify_live_api.py, integrations/mcp_server.py y requirements-dev.txt no están en el entorno; solo se subió el prompt .md."
+  },
+  "paso_2_ruta_elegida": "REST/HTTP directo, limitado a comprobaciones públicas mediante web_fetch. Las rutas 2 a 5 no están disponibles en esta sesión.",
+  "paso_3_credenciales": {
+    "SERVICE_API_KEY_utilizada": false,
+    "GITHUB_READ_TOKEN_utilizado": false,
+    "claves_solicitadas_al_usuario": false,
+    "fuerza_bruta_o_gates_adivinados": false
+  },
+  "pruebas": [
+    {
+      "id": "CAP-01",
+      "nombre": "Declaración de capacidades reales",
+      "estado": "PASS",
+      "ejecutado": "Inventario de herramientas disponibles en esta sesión (ver paso_1_capacidades_reales).",
+      "http": null,
+      "evidencia": "Inspección del entorno; es una comprobación de la sesión, no de la API.",
+      "dependencia_pendiente": null,
+      "siguiente_paso": null
+    },
+    {
+      "id": "PUB-01",
+      "nombre": "Comprobación pública GET en la URL base",
+      "estado": "NOT VERIFIED",
+      "ejecutado": "Un GET con web_fetch a https://precision-lab-readonly-api.onrender.com",
+      "http": "No disponible. La herramienta devolvió CLIENT_ERROR (error de cliente) sin exponer el código HTTP exacto.",
+      "evidencia": "{\"error_type\":\"CLIENT_ERROR\",\"error_message\":\"There was an error while fetching: the page returned a client error\"}",
+      "interpretacion": "Resultado no concluyente. Una respuesta 4xx en la raíz puede ser 401 por falta de clave, 404 porque la raíz no define ruta, o un bloqueo de la herramienta. No demuestra que el servicio esté averiado ni que esté sano.",
+      "dependencia_pendiente": "Cliente HTTP real que exponga código de estado y cuerpo.",
+      "siguiente_paso": "Ejecutar python scripts/verify_live_api.py en un entorno con red; el verificador sí registra código HTTP."
+    },
+    {
+      "id": "LV-AUTH",
+      "nombre": "Pruebas autenticadas (status, gate plan, run evidence)",
+      "estado": "BLOCKED",
+      "causa": "No hay acceso seguro a SERVICE_API_KEY, y web_fetch no permite enviar cabeceras personalizadas.",
+      "siguiente_paso": "Ejecutar el verificador con la clave en el entorno seguro del ejecutor autorizado."
+    },
+    {
+      "id": "GPT-ACTION",
+      "nombre": "GPT Action",
+      "estado": "N/A",
+      "causa": "No es una GPT con Action configurada."
+    },
+    {
+      "id": "MCP-LOCAL",
+      "nombre": "Servidor MCP local stdio (integrations/mcp_server.py)",
+      "estado": "BLOCKED",
+      "causa": "Este cliente no puede lanzar procesos MCP stdio locales y el código no está presente."
+    },
+    {
+      "id": "FC-API",
+      "nombre": "Function calling con host de herramientas (execute_readonly_tool)",
+      "estado": "N/A",
+      "causa": "El modelo se usa aquí desde un chat de consumo, no desde la API de desarrollador con host propio."
+    },
+    {
+      "id": "CONN-PROD",
+      "nombre": "Conectores de producto (Copilot Studio, Meta AI Connectors)",
+      "estado": "N/A",
+      "causa": "No se evalúan desde este cliente."
+    },
+    {
+      "id": "GATES",
+      "nombre": "Planes de gate Lite/Plus",
+      "estado": "PENDING",
+      "causa": "No se obtuvo ningún JSON autenticado, así que no hay un gate exacto identificado. No se adivinaron gates ni run IDs."
+    }
+  ],
+  "resumen_final": {
+    "1_pruebas_ejecutadas": [
+      "CAP-01 (inventario de capacidades)",
+      "PUB-01 (un GET público, resultado no concluyente)"
+    ],
+    "2_pruebas_bloqueadas_y_causa": {
+      "LV-AUTH": "sin SERVICE_API_KEY accesible y sin cabeceras personalizadas",
+      "MCP-LOCAL": "sin ejecución de procesos stdio ni código del servidor",
+      "GATES": "pendiente de JSON autenticado"
+    },
+    "3_limitaciones_del_producto": [
+      "El chat de consumo no puede acceder a una API externa solo porque el prompt mencione su URL.",
+      "bash_tool no tiene red.",
+      "web_fetch solo hace GET sin cabeceras personalizadas y no expone el código HTTP en los errores."
+    ],
+    "4_estado_real_de_lite_plus": "Desconocido. No se obtuvo ninguna respuesta válida de la API y no se infiere estado interno.",
+    "5_siguiente_paso": "Ejecutar python scripts/verify_live_api.py con SERVICE_API_KEY en un entorno con red y terminal, y compartir su salida para analizarla. No repetir PUB-01 hasta disponer de un cliente que muestre el código HTTP.",
+    "6_declaracion_escritura": "No hubo POST, PUT, PATCH, DELETE, commits, pushes, dispatch, cancelaciones, reruns, publicaciones ni llamadas a Compass Bridge. La única petición de red fue un GET público. No se simuló ninguna respuesta de la API."
+  }
+}
+```

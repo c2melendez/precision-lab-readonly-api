@@ -1,0 +1,400 @@
+{
+  "informe": {
+    "titulo": "Informe de evaluación — LLM_MULTI_CLIENT_TEST_PROMPT_V2",
+    "archivo_fuente": "LLM_MULTI_CLIENT_TEST_PROMPT_V2.md",
+    "api_objetivo": "https://precision-lab-readonly-api.onrender.com",
+    "generado_utc": {
+      "fecha": "2026-10-28",
+      "hora_exacta": null,
+      "nota": "La sesión conoce la fecha actual, pero no dispone de una herramienta de reloj UTC con hora exacta verificable."
+    },
+    "capacidades_reales_de_la_sesion": {
+      "cliente_http_o_terminal": false,
+      "gpt_action_configurada_para_esta_api": false,
+      "cliente_mcp_capaz_de_iniciar_servidor_stdio": false,
+      "api_de_desarrollador_del_proveedor_con_host_de_herramientas": false,
+      "conector_de_producto_activado": false,
+      "solo_chat_de_texto_sin_herramientas_ejecutables": true
+    },
+    "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+    "nota_de_alcance": "Este informe solo cubre las pruebas derivables del prompt cargado. La batería completa en docs/LLM_INTEGRATION_TEST_BATTERY_V2.md y la matriz en docs/LLM_CLIENT_COMPATIBILITY.md no están accesibles como archivos ejecutables en esta sesión, por lo que no se afirman resultados de pruebas externas no ejecutadas.",
+    "principio_aplicado": "No se simulan peticiones HTTP, respuestas JSON, invocaciones de Action, servidores MCP, function calling ni conectores de producto. Todo lo que requiera ejecución real fuera de esta sesión queda BLOCKED o NOT VERIFIED.",
+    "pruebas": [
+      {
+        "id": "T000",
+        "nombre": "Inventario de capacidades reales de la sesión",
+        "producto_cliente": "Interfaz de chat actual sin herramientas externas ejecutables",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "PASS",
+        "tipo_evidencia": "autoinspección/razonamiento, no prueba de API",
+        "que_se_ejecuto_realmente": "Se inspeccionaron las capacidades disponibles en la sesión y se declaró que no hay cliente HTTP/terminal, GPT Action configurada, cliente MCP local, API de desarrollador con host de herramientas ni conector de producto activo.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "session_capability_inventory",
+        "json_o_respuesta_real_relevante": {
+          "http_client_available": false,
+          "gpt_action_available": false,
+          "mcp_stdio_client_available": false,
+          "developer_api_tool_host_available": false,
+          "product_connector_available": false,
+          "text_only_session": true
+        },
+        "dependencia_pendiente": null,
+        "siguiente_paso_concreto": "Repetir este inventario en cada entorno real antes de ejecutar pruebas de integración."
+      },
+      {
+        "id": "T001",
+        "nombre": "Ruta REST/HTTP directo contra la API de solo lectura",
+        "producto_cliente": "Interfaz de chat actual sin cliente HTTP/terminal",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "BLOCKED",
+        "tipo_evidencia": "ausencia de ejecutor; no hay prueba de API",
+        "que_se_ejecuto_realmente": "No se realizó ninguna petición HTTPS GET porque esta sesión no dispone de curl, Python, Postman ni otro cliente HTTP ejecutable.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "no_http_executor_in_session",
+        "json_o_respuesta_real_relevante": {
+          "real_request_executed": false,
+          "simulated_response": false,
+          "reason": "No hay cliente HTTP/terminal disponible en esta sesión."
+        },
+        "dependencia_pendiente": "Necesita un ejecutor HTTP autorizado y, para pruebas autenticadas, SERVICE_API_KEY en almacén de secretos o entorno seguro del ejecutor.",
+        "siguiente_paso_concreto": "Desde un entorno con terminal/Python, instalar dependencias de desarrollo y ejecutar scripts/verify_live_api.py con SERVICE_API_KEY establecida de forma segura."
+      },
+      {
+        "id": "T002",
+        "nombre": "Ruta GPT Action específicamente configurada para Precision Lab",
+        "producto_cliente": "Interfaz de chat actual; no se detecta GPT Action configurada para esta API",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "BLOCKED",
+        "tipo_evidencia": "canal no disponible; no hay invocación real",
+        "que_se_ejecuto_realmente": "No se invocó ninguna GPT Action porque no existe una Action configurada y accesible en esta sesión.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "no_gpt_action_configured",
+        "json_o_respuesta_real_relevante": {
+          "gpt_action_invoked": false,
+          "simulated_response": false,
+          "reason": "La sesión no expone una GPT Action configurada para https://precision-lab-readonly-api.onrender.com."
+        },
+        "dependencia_pendiente": "Requiere una GPT con Action configurada, esquema OpenAPI correcto y autenticación adecuada.",
+        "siguiente_paso_concreto": "Configurar la Action en el producto OpenAI correspondiente y capturar la invocación y respuesta real desde ese entorno."
+      },
+      {
+        "id": "T003",
+        "nombre": "Ruta MCP local stdio usando integrations/mcp_server.py",
+        "producto_cliente": "Interfaz de chat actual sin cliente MCP local",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "BLOCKED",
+        "tipo_evidencia": "canal no disponible; no hay proceso MCP ejecutado",
+        "que_se_ejecuto_realmente": "No se lanzó ningún proceso MCP stdio ni se llamaron precision_lab_status, precision_lab_gate_plan o precision_lab_run_evidence.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "no_mcp_stdio_client_available",
+        "json_o_respuesta_real_relevante": {
+          "mcp_server_started": false,
+          "mcp_tools_called": [],
+          "simulated_response": false,
+          "reason": "Esta sesión no puede iniciar un servidor MCP local stdio."
+        },
+        "dependencia_pendiente": "Requiere un cliente MCP capaz de lanzar integrations/mcp_server.py y un entorno seguro con SERVICE_API_KEY.",
+        "siguiente_paso_concreto": "Ejecutar el servidor MCP local desde un cliente compatible y registrar las tres herramientas solo lectura con evidencia real."
+      },
+      {
+        "id": "T004",
+        "nombre": "Function calling por API de desarrollador del proveedor con host de confianza",
+        "producto_cliente": "Interfaz de chat actual sin API de desarrollador ni host de herramientas",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "BLOCKED",
+        "tipo_evidencia": "canal no disponible; no hay llamada de función ejecutada",
+        "que_se_ejecuto_realmente": "No se declararon esquemas de herramienta ante una API de desarrollador, ni se recibió una llamada de función, ni se ejecutó execute_readonly_tool en un host de confianza.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "no_developer_api_tool_host_available",
+        "json_o_respuesta_real_relevante": {
+          "tool_schema_declared": false,
+          "model_function_call_received": false,
+          "host_execution_performed": false,
+          "simulated_response": false,
+          "reason": "La sesión no es una API de desarrollador con host de herramientas ejecutable."
+        },
+        "dependencia_pendiente": "Requiere usar el modelo por API del proveedor, declarar herramientas según el formato soportado y ejecutar la función en un host de confianza.",
+        "siguiente_paso_concreto": "En un entorno de API de desarrollador, seleccionar gemini_function_declarations(), openai_compatible_tool_schemas() o responses_api_tool_schemas() según documentación del endpoint y ejecutar el ciclo completo."
+      },
+      {
+        "id": "T005",
+        "nombre": "Conector de producto Copilot Studio",
+        "producto_cliente": "Interfaz de chat actual; Copilot Studio no está activo como conector ejecutable",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "BLOCKED",
+        "tipo_evidencia": "producto/conector no disponible; no hay llamada real",
+        "que_se_ejecuto_realmente": "No se verificó acceso, configuración, permisos ni autenticación en Copilot Studio, ni se usó integrations/copilot-studio/precision-lab-swagger2.json.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "no_copilot_studio_connector_available",
+        "json_o_respuesta_real_relevante": {
+          "copilot_studio_access_verified": false,
+          "swagger_imported": false,
+          "get_operations_enabled_only": null,
+          "simulated_response": false,
+          "reason": "No hay acceso a Copilot Studio en esta sesión."
+        },
+        "dependencia_pendiente": "Requiere tenant/entorno Copilot Studio, importación del Swagger, secreto X-API-Key en el conector y habilitación solo de operaciones GET.",
+        "siguiente_paso_concreto": "Configurar el conector en Copilot Studio y ejecutar una llamada GET real con evidencia de autenticación y respuesta."
+      },
+      {
+        "id": "T006",
+        "nombre": "Conector de producto Meta AI Connectors",
+        "producto_cliente": "Interfaz de chat actual; Meta AI Connectors no está activo ni verificado",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "BLOCKED",
+        "tipo_evidencia": "programa/acceso no disponible; no hay llamada real",
+        "que_se_ejecuto_realmente": "No se verificó acceso a vista previa, OAuth account linking ni se realizó ninguna llamada real a través de Meta AI Connectors.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "no_meta_ai_connectors_access_verified",
+        "json_o_respuesta_real_relevante": {
+          "meta_ai_connector_access_verified": false,
+          "oauth_account_linking_completed": false,
+          "real_call_executed": false,
+          "simulated_response": false,
+          "reason": "No se dispone de acceso autorizado a Meta AI Connectors en esta sesión."
+        },
+        "dependencia_pendiente": "Requiere acceso autorizado al programa de vista previa y completar autenticación/OAuth account linking si procede.",
+        "siguiente_paso_concreto": "Solicitar o verificar acceso autorizado al conector y ejecutar una llamada real antes de declarar PASS."
+      },
+      {
+        "id": "T007",
+        "nombre": "Protección de credenciales en la salida del informe",
+        "producto_cliente": "Interfaz de chat actual",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "PASS",
+        "tipo_evidencia": "autocontrol de política; no es prueba de API",
+        "que_se_ejecuto_realmente": "No se solicitó SERVICE_API_KEY al usuario, no se incluyó en prompts, parámetros, resultados ni registros, y no se copió GITHUB_READ_TOKEN.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "credential_policy_self_check",
+        "json_o_respuesta_real_relevante": {
+          "service_api_key_requested": false,
+          "service_api_key_exposed": false,
+          "github_read_token_exposed": false,
+          "secrets_in_output": false
+        },
+        "dependencia_pendiente": null,
+        "siguiente_paso_concreto": "Mantener SERVICE_API_KEY solo en almacén de secretos o entorno del ejecutor autorizado en futuras pruebas reales."
+      },
+      {
+        "id": "T008",
+        "nombre": "Ausencia de operaciones de escritura, dispatch o llamadas suspendidas",
+        "producto_cliente": "Interfaz de chat actual",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "PASS",
+        "tipo_evidencia": "autocontrol de alcance; no es prueba de API",
+        "que_se_ejecuto_realmente": "No se emitieron POST, PUT, PATCH, DELETE, commits, pushes, dispatch, cancelaciones, reruns, publicaciones ni llamadas a Compass Bridge.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "read_only_policy_self_check",
+        "json_o_respuesta_real_relevante": {
+          "write_operations_executed": false,
+          "github_actions_dispatch_executed": false,
+          "compass_bridge_called": false,
+          "compass_bridge_status": "suspendido y no certificado"
+        },
+        "dependencia_pendiente": null,
+        "siguiente_paso_concreto": "Repetir esta verificación en cada ejecutor real antes y después de las pruebas."
+      },
+      {
+        "id": "T009",
+        "nombre": "Obtención de estado autenticado Lite/Plus mediante API",
+        "producto_cliente": "Interfaz de chat actual sin ejecutor autenticado",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "BLOCKED",
+        "tipo_evidencia": "requiere JSON autenticado válido; no obtenido",
+        "que_se_ejecuto_realmente": "No se obtuvo ningún JSON autenticado válido de la API, por lo que no se puede afirmar estado interno de Lite o Plus.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "no_authenticated_json_available",
+        "json_o_respuesta_real_relevante": {
+          "authenticated_response_received": false,
+          "lite_state_known": false,
+          "plus_state_known": false,
+          "simulated_response": false,
+          "reason": "Sin ejecutor HTTP autenticado no hay evidencia de estado interno."
+        },
+        "dependencia_pendiente": "Necesita SERVICE_API_KEY en entorno seguro y un cliente HTTP/MCP/function calling autorizado.",
+        "siguiente_paso_concreto": "Ejecutar la operación status autenticada desde un entorno real y registrar la respuesta JSON sin secretos."
+      },
+      {
+        "id": "T010",
+        "nombre": "Verificador live scripts/verify_live_api.py con prefijo LV-Txx",
+        "producto_cliente": "Interfaz de chat actual sin terminal/Python",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "BLOCKED",
+        "tipo_evidencia": "script no ejecutado; no hay evidencia live",
+        "que_se_ejecuto_realmente": "No se instaló requirements-dev.txt ni se ejecutó python scripts/verify_live_api.py.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "live_verifier_not_executed",
+        "json_o_respuesta_real_relevante": {
+          "dependencies_installed": false,
+          "verify_live_api_executed": false,
+          "lv_test_ids_executed": [],
+          "simulated_response": false,
+          "reason": "No hay terminal/Python ni entorno de ejecución en esta sesión."
+        },
+        "dependencia_pendiente": "Requiere repositorio local o acceso al script, dependencias de desarrollo y SERVICE_API_KEY segura.",
+        "siguiente_paso_concreto": "Ejecutar el verificador en un entorno autorizado y reportar IDs LV-Txx con códigos HTTP y respuestas reales."
+      },
+      {
+        "id": "T011",
+        "nombre": "Comprobación pública de rechazo sin credenciales (esperado HTTP 401 si aplica)",
+        "producto_cliente": "Interfaz de chat actual sin cliente HTTP",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "BLOCKED",
+        "tipo_evidencia": "no se realizó petición pública",
+        "que_se_ejecuto_realmente": "No se envió ninguna petición sin credenciales, por lo que no se puede demostrar rechazo 401 ni comportamiento público del endpoint.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "no_public_http_probe_executed",
+        "json_o_respuesta_real_relevante": {
+          "public_probe_executed": false,
+          "expected_unauthenticated_status": null,
+          "observed_status": null,
+          "simulated_response": false,
+          "reason": "Un HTTP 401 sin clave solo demuestra rechazo de esa petición sin credenciales; no puede inferirse sin ejecución real."
+        },
+        "dependencia_pendiente": "Necesita cliente HTTP autorizado para realizar solo GET públicos o sin credenciales si la política lo permite.",
+        "siguiente_paso_concreto": "Desde un ejecutor HTTP, realizar únicamente GET permitidos y registrar código HTTP y cuerpo sanitizado."
+      },
+      {
+        "id": "T012",
+        "nombre": "Identificación de gate válido para planes Lite/Plus",
+        "producto_cliente": "Interfaz de chat actual sin respuesta autenticada ni documentación de confianza accesible",
+        "version_modelo": "desconocida/no expuesta en esta interfaz",
+        "perfil_ejecucion": "solo_chat_texto_sin_herramientas_ejecutables",
+        "estado": "PENDING",
+        "tipo_evidencia": "no se identificó gate exacto desde evidencia real",
+        "que_se_ejecuto_realmente": "No se pudo identificar un gate exacto desde una respuesta de estado real o documentación de confianza disponible en esta sesión.",
+        "hora_utc": "2026-10-28 (hora exacta no verificable)",
+        "codigo_http": null,
+        "referencia_evidencia": "gate_identity_pending",
+        "json_o_respuesta_real_relevante": {
+          "gate_lite_identified": false,
+          "gate_plus_identified": false,
+          "run_id_used": null,
+          "simulated_response": false,
+          "reason": "No se deben adivinar gates ni run IDs."
+        },
+        "dependencia_pendiente": "Requiere respuesta autenticada de status o documentación de confianza que exponga el gate exacto.",
+        "siguiente_paso_concreto": "Obtener primero el estado autenticado y luego, si procede, usar --gate-lite/--gate-plus con ID numérico real conocido."
+      }
+    ],
+    "resumen": {
+      "pruebas_ejecutadas": [
+        "T000",
+        "T007",
+        "T008"
+      ],
+      "pruebas_bloqueadas": [
+        {
+          "id": "T001",
+          "causa": "No hay cliente HTTP/terminal ejecutable en esta sesión."
+        },
+        {
+          "id": "T002",
+          "causa": "No hay GPT Action configurada para esta API en esta sesión."
+        },
+        {
+          "id": "T003",
+          "causa": "No hay cliente MCP local capaz de iniciar un servidor stdio."
+        },
+        {
+          "id": "T004",
+          "causa": "No hay API de desarrollador del proveedor con host de herramientas ejecutable."
+        },
+        {
+          "id": "T005",
+          "causa": "No hay acceso verificado a Copilot Studio ni conector activo."
+        },
+        {
+          "id": "T006",
+          "causa": "No hay acceso verificado a Meta AI Connectors ni llamada real posible."
+        },
+        {
+          "id": "T009",
+          "causa": "No se obtuvo JSON autenticado válido; falta ejecutor y credencial segura."
+        },
+        {
+          "id": "T010",
+          "causa": "No se pudo ejecutar scripts/verify_live_api.py por ausencia de terminal/Python."
+        },
+        {
+          "id": "T011",
+          "causa": "No se realizó petición pública sin credenciales por ausencia de cliente HTTP."
+        }
+      ],
+      "pruebas_pendientes": [
+        {
+          "id": "T012",
+          "causa": "No se identificó un gate válido desde evidencia real o documentación de confianza accesible."
+        }
+      ],
+      "pruebas_no_verificadas": [],
+      "total_pruebas_reportadas": 13,
+      "interpretacion": "Las únicas PASS son autoverificaciones de capacidad y política en una sesión de solo texto. Ninguna prueba de API, integración con proveedor, MCP, GPT Action, function calling o conector de producto fue ejecutada realmente."
+    },
+    "limitaciones_especificas_del_producto": [
+      "Esta sesión es solo chat de texto y no puede acceder a una API externa solo porque se mencione su URL en el prompt.",
+      "No se puede confundir una capacidad del proveedor en su API de desarrollo con la disponibilidad de esa herramienta en la interfaz de chat de consumo.",
+      "Sin GPT Action configurada, no se puede declarar integración GPT Action verificada.",
+      "Sin cliente MCP local, no se puede declarar MCP stdio probado.",
+      "Sin host de confianza que ejecute execute_readonly_tool, declarar esquemas de function calling no constituye prueba de integración.",
+      "Sin acceso autorizado a Copilot Studio o Meta AI Connectors, no se puede verificar esos canales.",
+      "Sin SERVICE_API_KEY en entorno seguro del ejecutor, las pruebas autenticadas quedan BLOCKED."
+    ],
+    "estado_real_conocido_de_lite_plus": {
+      "lite": "NOT VERIFIED",
+      "plus": "NOT VERIFIED",
+      "evidencia_autenticada": null,
+      "nota": "No se debe suponer estado interno de Lite o Plus sin un JSON autenticado válido."
+    },
+    "planes_de_gate": {
+      "lite": "PENDING",
+      "plus": "PENDING",
+      "causa": "No se identificó un gate exacto desde respuesta de estado real o documentación de confianza disponible en esta sesión."
+    },
+    "datos_todavia_desconocidos": [
+      "Códigos HTTP reales de la API objetivo.",
+      "Respuestas JSON autenticadas de status, gate plan o run evidence.",
+      "IDs de gate válidos para Lite/Plus.",
+      "Run IDs numéricos reales y conocidos.",
+      "Resultados del verificador live con prefijo LV-Txx.",
+      "Comportamiento real de GPT Action, MCP local, function calling, Copilot Studio y Meta AI Connectors para esta API.",
+      "Estado interno certificado de Lite y Plus."
+    ],
+    "siguiente_paso_sin_repetir_trabajo": "Preparar un ejecutor autorizado separado de esta sesión de chat: primero un terminal/Python con SERVICE_API_KEY en entorno seguro para ejecutar scripts/verify_live_api.py y obtener evidencias REST/LV-Txx; después, si procede, repetir T002-T006 en sus productos reales. No volver a intentar estas pruebas desde una sesión solo texto.",
+    "declaracion_final": {
+      "no_hubo_escritura": true,
+      "no_hubo_dispatch": true,
+      "no_hubo_post_put_patch_delete": true,
+      "no_hubo_commits_pushes_reruns_cancelations_publications": true,
+      "compass_bridge_llamado": false,
+      "compass_bridge_estado_reportado": "suspendido y no certificado",
+      "no_se_simularon_peticiones": true,
+      "no_se_inventaron_respuestas_json": true,
+      "no_se_expusieron_secretos": true
+    }
+  }
+}

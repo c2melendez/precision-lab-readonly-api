@@ -1,0 +1,191 @@
+```json
+{
+  "evaluator": "Grok (xAI)",
+  "session_profile": {
+    "product_client": "Grok chat (grok.com) with remote Linux sandbox",
+    "model": "Grok 4.5",
+    "execution_capabilities_declared": [
+      "REST/HTTP directo via bash + curl + Python (available and used)",
+      "Terminal / Python package install possible",
+      "No GPT Action configured for this API",
+      "No MCP local stdio client available in this session",
+      "No developer API host / function-calling executor for external tools beyond built-in",
+      "No product connector (Copilot Studio / Meta AI) activated",
+      "SERVICE_API_KEY not present in environment or secret store"
+    ],
+    "chosen_route": "REST/HTTP directo (public endpoints only)"
+  },
+  "timestamp_utc": "2026-10-28T06:07:06Z",
+  "api_base": "https://precision-lab-readonly-api.onrender.com",
+  "tests": [
+    {
+      "id": "LV-T01",
+      "name": "Healthz liveness (public)",
+      "status": "PASS",
+      "executed": true,
+      "http_code": 200,
+      "evidence": {
+        "request": "GET /healthz",
+        "response": {"status": "ok", "service": "precision-lab-readonly-api", "read_only": true},
+        "headers_observed": ["x-read-only: true", "x-render-origin-server: uvicorn"]
+      },
+      "notes": "Pure liveness; no GitHub or config disclosure."
+    },
+    {
+      "id": "LV-T02",
+      "name": "OpenAPI discovery (public)",
+      "status": "PASS",
+      "executed": true,
+      "http_code": 200,
+      "evidence": {
+        "request": "GET /openapi.json",
+        "paths_discovered": [
+          "/healthz",
+          "/v1/status",
+          "/v1/gates/{gate}/plan",
+          "/v1/runs/{run_id}"
+        ],
+        "security_scheme": "APIKeyHeader (header name: X-API-Key)",
+        "info": {
+          "title": "Precision Lab Certification Read-only API",
+          "version": "0.1.0",
+          "description_summary": "Observation-only; no dispatch/cancel/re-run/publish/push/mutate"
+        }
+      },
+      "notes": "Spec confirms read-only surface only."
+    },
+    {
+      "id": "LV-T03",
+      "name": "Status endpoint without credentials",
+      "status": "PASS",
+      "executed": true,
+      "http_code": 401,
+      "evidence": {
+        "request": "GET /v1/status (no X-API-Key)",
+        "response": {"error": "unauthorized", "detail": "Missing or invalid API key", "read_only": true}
+      },
+      "notes": "Correct rejection of unauthenticated request; does not indicate service failure."
+    },
+    {
+      "id": "LV-T04",
+      "name": "Status endpoint with invalid key",
+      "status": "PASS",
+      "executed": true,
+      "http_code": 401,
+      "evidence": {
+        "request": "GET /v1/status (X-API-Key: dummy)",
+        "response": {"error": "unauthorized", "detail": "Missing or invalid API key", "read_only": true}
+      },
+      "notes": "Invalid key correctly rejected."
+    },
+    {
+      "id": "LV-T05",
+      "name": "Gate plan endpoint without credentials",
+      "status": "PASS",
+      "executed": true,
+      "http_code": 401,
+      "evidence": {
+        "request": "GET /v1/gates/test/plan?repo=lite (no key)",
+        "response": {"error": "unauthorized", "detail": "Missing or invalid API key", "read_only": true}
+      },
+      "notes": "Auth gate enforced."
+    },
+    {
+      "id": "LV-T06",
+      "name": "Run evidence endpoint without credentials",
+      "status": "PASS",
+      "executed": true,
+      "http_code": 401,
+      "evidence": {
+        "request": "GET /v1/runs/123 (no key)",
+        "response": {"error": "unauthorized", "detail": "Missing or invalid API key", "read_only": true}
+      },
+      "notes": "Auth gate enforced."
+    },
+    {
+      "id": "LV-T07",
+      "name": "Authenticated status (real SERVICE_API_KEY)",
+      "status": "BLOCKED",
+      "executed": false,
+      "http_code": null,
+      "evidence": null,
+      "dependency": "SERVICE_API_KEY must be present in the secure executor environment; not available in this session and must not be requested from the user.",
+      "next_step": "Re-run from an authorized host that injects SERVICE_API_KEY into the process environment, then execute GET /v1/status?repo=both."
+    },
+    {
+      "id": "LV-T08",
+      "name": "Authenticated gate plan (known gate)",
+      "status": "BLOCKED",
+      "executed": false,
+      "http_code": null,
+      "evidence": null,
+      "dependency": "Valid SERVICE_API_KEY + a real gate identifier obtained from a prior authenticated /v1/status response.",
+      "next_step": "After successful authenticated status, extract a concrete gate and call GET /v1/gates/{gate}/plan?repo=lite (or plus)."
+    },
+    {
+      "id": "LV-T09",
+      "name": "Authenticated run evidence (known run_id)",
+      "status": "BLOCKED",
+      "executed": false,
+      "http_code": null,
+      "evidence": null,
+      "dependency": "Valid SERVICE_API_KEY + numeric run_id from prior authenticated evidence.",
+      "next_step": "Use a verified run_id from status or gate plan response."
+    },
+    {
+      "id": "LV-T10",
+      "name": "MCP local stdio integration",
+      "status": "BLOCKED",
+      "executed": false,
+      "evidence": null,
+      "dependency": "Session has no MCP stdio client capable of launching integrations/mcp_server.py.",
+      "notes": "Local MCP would expose only precision_lab_status, precision_lab_gate_plan, precision_lab_run_evidence; remote MCP not deployed."
+    },
+    {
+      "id": "LV-T11",
+      "name": "GPT Action / product connector",
+      "status": "N/A",
+      "executed": false,
+      "evidence": null,
+      "notes": "No GPT Action or product connector is configured or activated in this chat session."
+    }
+  ],
+  "summary": {
+    "tests_executed": ["LV-T01", "LV-T02", "LV-T03", "LV-T04", "LV-T05", "LV-T06"],
+    "tests_blocked": [
+      {
+        "id": "LV-T07",
+        "cause": "SERVICE_API_KEY absent from secure environment"
+      },
+      {
+        "id": "LV-T08",
+        "cause": "SERVICE_API_KEY absent; no known valid gate"
+      },
+      {
+        "id": "LV-T09",
+        "cause": "SERVICE_API_KEY absent; no known valid run_id"
+      },
+      {
+        "id": "LV-T10",
+        "cause": "No local MCP stdio client in session"
+      }
+    ],
+    "product_limitations": [
+      "Chat session can perform public HTTPS GETs via sandbox curl/Python but cannot inject secrets into the process environment.",
+      "No pre-configured GPT Action, MCP remote endpoint, or product connector for this API.",
+      "Authenticated surface intentionally requires X-API-Key header; unauthenticated calls correctly return 401."
+    ],
+    "lite_plus_state": {
+      "known": "None. No authenticated JSON obtained; internal Lite/Plus continuity, runner version, latest records, and gate recommendations remain unknown.",
+      "unknown": [
+        "Current continuity pointers for lite and plus",
+        "Any concrete gate identifiers",
+        "Any concrete run_ids or GitHub Actions evidence",
+        "Planner recommendations (RUN is advisory only)"
+      ]
+    },
+    "next_step_without_repeat": "Execute the authenticated suite from a host that already holds SERVICE_API_KEY in its environment (or secret store injected at process start). First call GET /v1/status?repo=both, then use returned gates/run_ids for plan and evidence endpoints. Do not request the key in chat.",
+    "no_write_declaration": "No POST, PUT, PATCH, DELETE, commit, push, dispatch, cancel, re-run, publish, or Compass Bridge call was performed. All requests were HTTPS GET only. Service header x-read-only: true observed on every response."
+  }
+}
+```
