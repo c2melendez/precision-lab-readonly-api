@@ -67,9 +67,12 @@ Si el cliente no puede conservar la clave de forma segura, no lo conectes; usa o
 ## 3. Function calling en API de modelos
 
 El módulo `integrations/read_only_client.py` expone:
-- `openai_compatible_tool_schemas()`: esquemas para APIs con formato OpenAI-compatible, cuando el endpoint/modelo documenta esa compatibilidad.
+- `openai_compatible_tool_schemas()`: esquema de herramientas anidado para Chat Completions compatible con OpenAI; utilízalo con DeepSeek, Qwen, Meta Model API o xAI solo cuando la API/modelo seleccionado documente ese formato.
+- `responses_api_tool_schemas()`: esquema plano de herramientas para APIs de formato Responses, como las rutas documentadas por Meta Model API y xAI que usan esa forma.
 - `gemini_function_declarations()`: declaraciones para el formato de function calling de Gemini.
 - `execute_readonly_tool(name, arguments)`: ejecutor allowlisted para que la aplicación que integra el modelo realice el GET y devuelva el JSON al modelo.
+
+Los esquemas omiten algunas restricciones JSON Schema para mejorar portabilidad entre proveedores. **La validación de seguridad no depende del esquema recibido por el modelo**: el ejecutor valida alias de repositorio, identificadores de gate y run ID, restringe las funciones disponibles y mantiene fija la URL de destino. Si el proveedor utiliza un formato distinto, crea un adaptador de esquema explícito; no reutilices automáticamente el formato de Chat Completions en Responses API.
 
 La aplicación anfitriona debe implementar el ciclo propio del proveedor:
 1. Enviar al modelo el esquema de herramientas.
