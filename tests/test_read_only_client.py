@@ -11,6 +11,7 @@ from integrations.read_only_client import (
     execute_readonly_tool,
     gemini_function_declarations,
     openai_compatible_tool_schemas,
+    responses_api_tool_schemas,
 )
 
 
@@ -139,6 +140,7 @@ def test_api_base_url_must_be_https_and_must_not_embed_credentials():
 def test_function_schemas_are_available_for_openai_compatible_and_gemini_hosts():
     openai_tools = openai_compatible_tool_schemas()
     gemini_tools = gemini_function_declarations()
+    responses_tools = responses_api_tool_schemas()
 
     def schema_keys(node):
         if isinstance(node, dict):
@@ -153,9 +155,12 @@ def test_function_schemas_are_available_for_openai_compatible_and_gemini_hosts()
             return nested
         return set()
 
-    assert "additionalProperties" not in schema_keys(gemini_tools)
-    assert "pattern" not in schema_keys(gemini_tools)
-    assert "default" not in schema_keys(gemini_tools)
+    for provider_schema in (openai_tools, gemini_tools, responses_tools):
+        assert "additionalProperties" not in schema_keys(provider_schema)
+        assert "pattern" not in schema_keys(provider_schema)
+        assert "default" not in schema_keys(provider_schema)
+    assert all(item["type"] == "function" and "name" in item and "function" not in item
+               for item in responses_tools)
     assert {item["function"]["name"] for item in openai_tools} == {
         "precision_lab_status",
         "precision_lab_gate_plan",
@@ -166,7 +171,7 @@ def test_function_schemas_are_available_for_openai_compatible_and_gemini_hosts()
         "precision_lab_gate_plan",
         "precision_lab_run_evidence",
     }
-    assert all("additionalProperties" in item["function"]["parameters"] for item in openai_tools)
+    assert all("parameters" in item["function"] for item in openai_tools)
     descriptions = " ".join(item["function"]["description"] for item in openai_tools)
     assert "never dispatches" in descriptions
     assert "not by itself certification PASS" in descriptions
