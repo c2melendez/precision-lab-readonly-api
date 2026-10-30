@@ -144,6 +144,8 @@ En el corte de 2026-10-26, Lite está en revisión documental r301 y Plus en r31
 
 ## Bridge y automatización end-to-end — corte 2026-10-27
 
+Actualización 2026-10-30: se añadió en la rama feature/bridge-readonly-run-status un endpoint GET protegido para consultar el estado de un run de Compass mediante llm/X-Bridge-Key. Está pendiente de revisión y despliegue; su inclusión en esta rama no certifica la conexión en producción.
+
 La búsqueda en los repositorios disponibles no identificó un repositorio/endpoint Bridge inequívoco para la certificación. El término “Bridge” encontrado en Lite corresponde a stores de navegación UI/Argand/Graphing, no a una integración GitHub→API→Runner; no se considera evidencia del Bridge de certificación. El API sigue siendo estrictamente GET/read-only: no puede disparar workflows ni publicar resultados. Por tanto, el circuito de automatización requiere un componente externo identificado y sigue `NOT_YET_VERIFIED`. No crear un endpoint ficticio ni ampliar permisos de la API para suplir ese componente.
 
 
