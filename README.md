@@ -152,3 +152,12 @@ Documentos operativos coordinados con el Prompt maestro (repositorios Lite/Plus,
 - [ROADMAP_GITHUB_ALTERNATIVE_CONNECTION.md](https://github.com/c2melendez/precision-lab-plus/blob/qa/syntax-audit-in625-a1/qa/certification/ROADMAP_GITHUB_ALTERNATIVE_CONNECTION.md)
 
 El Prompt maestro de Lite y Plus prioriza estos documentos antes de reanudar la certificación general de motores matemáticos. El proyecto Supabase `oqlzftercvraprnvjifo` se reportó INACTIVE; no se ha inspeccionado el esquema porque las consultas de tablas/migraciones no pudieron completarse. No se aplicaron cambios de esquema.
+
+
+## Separación de objetivos: API_GPT, GPT Actions y motor matemático
+
+Este repositorio respalda el proyecto de ampliación de capacidades de API_GPT y la evaluación de GPT Actions en distintos LLMs. La API permite consultar el estado de Precision Lab Lite/Plus, inspeccionar planes de gates en modo lectura y recuperar evidencia de GitHub Actions. Es un instrumento de interoperabilidad/observabilidad; no es el motor matemático, no modifica los repositorios y no ejecuta gates.
+
+La validación de esta API, la importación del esquema OpenAPI y las pruebas de GPT Actions/LLMs constituyen un frente independiente. **No son un prerrequisito ni un bloqueo para desarrollar o certificar el motor matemático.** Del mismo modo, la certificación matemática no certifica automáticamente API_GPT ni Compass/Bridge. Mantener resultados y criterios separados.
+
+Compass/Bridge, si se utiliza, es un ejecutor distinto de esta API GET-only y conserva su propio backlog de seguridad, persistencia e integración. Un bloqueo de Compass no debe detener la continuación de las matrices matemáticas. Esta separación no autoriza ampliar permisos, añadir endpoints de escritura ni relajar controles de seguridad.
