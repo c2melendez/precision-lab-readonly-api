@@ -161,3 +161,20 @@ Este repositorio respalda el proyecto de ampliación de capacidades de API_GPT y
 La validación de esta API, la importación del esquema OpenAPI y las pruebas de GPT Actions/LLMs constituyen un frente independiente. **No son un prerrequisito ni un bloqueo para desarrollar o certificar el motor matemático.** Del mismo modo, la certificación matemática no certifica automáticamente API_GPT ni Compass/Bridge. Mantener resultados y criterios separados.
 
 Compass/Bridge, si se utiliza, es un ejecutor distinto de esta API GET-only y conserva su propio backlog de seguridad, persistencia e integración. Un bloqueo de Compass no debe detener la continuación de las matrices matemáticas. Esta separación no autoriza ampliar permisos, añadir endpoints de escritura ni relajar controles de seguridad.
+
+## Evidencia multi-LLM almacenada
+
+El repositorio conserva ocho informes de la batería multi-cliente v2 en `tests/`: Claude, Copilot, DeepSeek, Gemini, Grok, Meta AI, Qwen Coder y Qwen. Los informes son evidencia de las capacidades reales de cada sesión; **no deben agregarse como si todos fueran pruebas exitosas de GPT Actions**.
+
+| Cliente / informe | Resultado relevante |
+|---|---|
+| Grok 4.5 | 6 comprobaciones públicas PASS: `/healthz` y `/openapi.json` 200; endpoints protegidos sin clave y clave incorrecta 401. Autenticación válida, plan y run autenticados bloqueados por falta de `SERVICE_API_KEY`; GPT Action/MCP no configurados. |
+| Qwen Coder | 7 PASS, 5 BLOCKED, 1 NOT VERIFIED, 1 N/A. Verificó liveness, rechazo sin clave, OpenAPI/schema, POST rechazado (405) y cold start; no completó endpoints autenticados ni function calling real. |
+| Claude Sonnet 5.5 | Inventario de capacidades PASS; GET público no concluyente; autenticación bloqueada; GPT Action no configurada. |
+| M365 Copilot | Inventario de capacidades PASS; sin canal HTTP/Action autorizado para la API, por lo que las pruebas de integración quedaron BLOCKED. |
+| Qwen | 3 PASS de inventario/protección/no-escritura; 9 BLOCKED y 1 PENDING. La sesión era solo chat, sin HTTP, Action, MCP ni function-calling ejecutable. |
+| DeepSeek | 5 pruebas BLOCKED; sesión de solo texto sin canal de ejecución. |
+| Gemini | 2 pruebas BLOCKED por falta de red externa y credencial en el sandbox. |
+| Meta AI / Muse Spark 1.1 | 1 PASS de no-escritura; 8 BLOCKED, 4 PENDING, 1 NOT VERIFIED y 3 N/A por restricciones del cliente y del entorno. |
+
+**Conclusión de la batería:** se comprobó parcialmente la superficie pública y el comportamiento de rechazo de autenticación, especialmente con Grok y Qwen Coder. No hay en estos informes evidencia de una GPT Action de Precision Lab ejecutada end-to-end con autenticación válida en varios LLMs. El objetivo siguiente del frente API_GPT es completar esa evaluación en clientes que realmente soporten la Action y dispongan de la credencial en un entorno seguro, sin pedirla ni almacenarla en los informes. Esta carencia pertenece al frente de integración multi-LLM y no bloquea el motor matemático.
