@@ -178,6 +178,20 @@ def test_dispatch_client_uses_dedicated_scoped_key_and_idempotency_header(monkey
     assert seen["client_kwargs"] == {"timeout": 11, "follow_redirects": False}
 
 
+def test_dispatch_client_never_falls_back_to_the_read_only_key():
+    settings = Settings(
+        github_token="", service_api_key="", bridge_api_key="read-only-secret",
+        bridge_dispatch_api_key="", bridge_base_url="https://bridge.example",
+    )
+    try:
+        dispatch_bridge_run({"idempotency_key": "same-key"}, settings)
+    except BridgeApiError as exc:
+        assert exc.status_code == 503
+        assert "dispatch credential" in exc.message
+    else:
+        raise AssertionError("Read-only credential must never be reused for dispatch")
+
+
 def test_dispatch_client_treats_timeout_as_uncertain_and_never_retries(monkeypatch):
     class FakeClient:
         def __init__(self, **_kwargs):
