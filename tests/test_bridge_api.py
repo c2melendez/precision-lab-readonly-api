@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.bridge_api import BridgeApiError, get_bridge_run
+from app.bridge_api import BridgeApiError, dispatch_bridge_run, get_bridge_run
 from app.config import Settings
 from fastapi.testclient import TestClient
 from app.main import app
@@ -124,3 +124,177 @@ def test_bridge_timeout_defaults_to_ninety_seconds_and_supports_override(monkeyp
 
     monkeypatch.setenv("BRIDGE_TIMEOUT_SECONDS", "23")
     assert Settings.from_env().bridge_timeout_seconds == 23.0
+
+
+
+def test_dispatch_client_uses_dedicated_scoped_key_and_idempotency_header(monkeypatch):
+    seen = {}
+
+    class FakeResponse:
+        status_code = 201
+
+        @staticmethod
+        def json():
+            return {"id": "receipt-uuid", "idempotency_id": "claim-uuid", "reused": False}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            seen["client_kwargs"] = kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def post(self, url, headers, json):
+            seen.update(url=url, headers=headers, json=json)
+            return FakeResponse()
+
+    monkeypatch.setattr("app.bridge_api.httpx.Client", FakeClient)
+    settings = Settings(
+        github_token="",
+        service_api_key="",
+        bridge_api_key="read-only-secret",
+        bridge_dispatch_api_key="dispatch-only-secret",
+        bridge_base_url="https://bridge.example",
+        bridge_timeout_seconds=11,
+    )
+    payload = {
+        "target_repo": "lite", "gate": "cumulative", "dry_run": False,
+        "idempotency_key": "validation-1", "validation_id": "validation-1",
+        "correlation_id": "correlation-1", "branch": "qa/certification",
+        "requested_sha": "a" * 40,
+    }
+    status, body = dispatch_bridge_run(payload, settings)
+
+    assert status == 201
+    assert body["id"] == "receipt-uuid"
+    assert seen["url"] == "https://bridge.example/api/runs"
+    assert seen["headers"]["X-Bridge-Key"] == "dispatch-only-secret"
+    assert seen["headers"]["Idempotency-Key"] == "validation-1"
+    assert "read-only-secret" not in str(seen["headers"])
+    assert seen["json"] == payload
+    assert seen["client_kwargs"] == {"timeout": 11, "follow_redirects": False}
+
+
+def test_dispatch_client_treats_timeout_as_uncertain_and_never_retries(monkeypatch):
+    class FakeClient:
+        def __init__(self, **_kwargs):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *_args):
+            return False
+        def post(self, *_args, **_kwargs):
+            import httpx
+            raise httpx.ReadTimeout("timed out")
+
+    monkeypatch.setattr("app.bridge_api.httpx.Client", FakeClient)
+    settings = Settings(
+        github_token="", service_api_key="", bridge_dispatch_api_key="dispatch-secret",
+        bridge_base_url="https://bridge.example",
+    )
+    try:
+        dispatch_bridge_run({"idempotency_key": "same-key"}, settings)
+    except BridgeApiError as exc:
+        assert exc.status_code == 409
+        assert "DISPATCH_OUTCOME_UNKNOWN" in exc.message
+    else:
+        raise AssertionError("Timeout must be treated as an uncertain dispatch outcome")
+
+
+def test_dispatch_route_requires_observer_authentication_and_live_run_plan(monkeypatch):
+    monkeypatch.setenv("SERVICE_API_KEY", "observer-secret")
+    monkeypatch.setenv("BRIDGE_DISPATCH_KEY", "dispatch-secret")
+    monkeypatch.setenv("BRIDGE_BASE_URL", "https://bridge.example")
+    client = TestClient(app)
+    payload = {
+        "target_repo": "lite", "gate": "cumulative", "dry_run": False,
+        "idempotency_key": "validation-1", "validation_id": "validation-1",
+        "correlation_id": "correlation-1", "branch": "qa/syntax-audit-in625-a1",
+        "requested_sha": "a" * 40,
+    }
+    response = client.post("/v1/bridge/dispatch", json=payload)
+    assert response.status_code == 401
+
+
+def test_dispatch_route_does_not_call_bridge_when_plan_is_not_run(monkeypatch):
+    monkeypatch.setenv("SERVICE_API_KEY", "observer-secret")
+    monkeypatch.setenv("BRIDGE_DISPATCH_KEY", "dispatch-secret")
+    from app.main import get_github
+    app.dependency_overrides[get_github] = lambda: object()
+    monkeypatch.setattr("app.main.get_gate_plan", lambda *_args: {
+        "state_status": "CURRENT",
+        "canonical_branch": "qa/syntax-audit-in625-a1",
+        "observed_head": "a" * 40,
+        "gate": {"decision": "WAIT", "reason": "Equivalent gate run is active"},
+    })
+    monkeypatch.setattr("app.main.dispatch_bridge_run", lambda *_args: (_ for _ in ()).throw(AssertionError("Bridge must not be called")))
+    try:
+        response = TestClient(app).post("/v1/bridge/dispatch", json={
+            "target_repo": "lite", "gate": "cumulative", "dry_run": False,
+            "idempotency_key": "validation-1", "validation_id": "validation-1",
+            "correlation_id": "correlation-1", "branch": "qa/syntax-audit-in625-a1",
+            "requested_sha": "a" * 40,
+        }, headers={"X-API-Key": "observer-secret"})
+        assert response.status_code == 200
+        assert response.json()["decision"] == "WAIT"
+        assert response.json()["action_taken"] is False
+        assert response.headers["X-Read-Only"] == "false"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_dispatch_route_rejects_stale_head_before_bridge_call(monkeypatch):
+    monkeypatch.setenv("SERVICE_API_KEY", "observer-secret")
+    from app.main import get_github
+    app.dependency_overrides[get_github] = lambda: object()
+    monkeypatch.setattr("app.main.get_gate_plan", lambda *_args: {
+        "state_status": "CURRENT",
+        "canonical_branch": "qa/syntax-audit-in625-a1",
+        "observed_head": "b" * 40,
+        "gate": {"decision": "RUN", "reason": "No equivalent run"},
+    })
+    monkeypatch.setattr("app.main.dispatch_bridge_run", lambda *_args: (_ for _ in ()).throw(AssertionError("Bridge must not be called")))
+    try:
+        response = TestClient(app).post("/v1/bridge/dispatch", json={
+            "target_repo": "lite", "gate": "cumulative", "dry_run": False,
+            "idempotency_key": "validation-1", "validation_id": "validation-1",
+            "correlation_id": "correlation-1", "branch": "qa/syntax-audit-in625-a1",
+            "requested_sha": "a" * 40,
+        }, headers={"X-API-Key": "observer-secret"})
+        assert response.status_code == 409
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_dispatch_route_requires_canonical_branch_and_sha_and_calls_bridge(monkeypatch):
+    monkeypatch.setenv("SERVICE_API_KEY", "observer-secret")
+    monkeypatch.setenv("BRIDGE_DISPATCH_KEY", "dispatch-secret")
+    from app.main import get_github
+    app.dependency_overrides[get_github] = lambda: object()
+    monkeypatch.setattr("app.main.get_gate_plan", lambda *_args: {
+        "state_status": "CURRENT",
+        "canonical_branch": "qa/syntax-audit-in625-a1",
+        "observed_head": "a" * 40,
+        "gate": {"decision": "RUN", "reason": "No equivalent run"},
+    })
+    seen = {}
+    monkeypatch.setattr("app.main.dispatch_bridge_run", lambda payload, settings: (
+        seen.update(payload=payload, key=settings.bridge_dispatch_api_key) or
+        (201, {"id": "receipt-uuid", "reused": False})
+    ))
+    try:
+        response = TestClient(app).post("/v1/bridge/dispatch", json={
+            "target_repo": "lite", "gate": "cumulative", "dry_run": False,
+            "idempotency_key": "validation-1", "validation_id": "validation-1",
+            "correlation_id": "correlation-1", "branch": "qa/syntax-audit-in625-a1",
+            "requested_sha": "a" * 40,
+        }, headers={"X-API-Key": "observer-secret"})
+        assert response.status_code == 201
+        assert response.json()["id"] == "receipt-uuid"
+        assert seen["key"] == "dispatch-secret"
+        assert seen["payload"]["requested_sha"] == "a" * 40
+    finally:
+        app.dependency_overrides.clear()
