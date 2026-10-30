@@ -158,7 +158,25 @@ def test_status_is_read_only_and_sanitizes_document_package_url(monkeypatch):
         assert "evil.example" not in response.text
         assert record["runner_run_url"] == "https://github.com/c2melendez/precision-lab-lite/actions/runs/1234"
         assert record["dispatched_run_url"] == "https://github.com/c2melendez/precision-lab-lite/actions/runs/555"
-        assert any("[skip ci]" in warning for warning in payload["warnings"])
+        assert not any("skip-Actions marker" in warning for warning in payload["warnings"])
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_status_warns_on_skip_marker_when_docs_package_changes_gate_inputs(monkeypatch):
+    monkeypatch.setenv("SERVICE_API_KEY", "test-key")
+    fake = FakeGitHub()
+    # A historical docs publication that also changes a technical gate input
+    # must be surfaced for reconciliation; prose-only paths should not warn.
+    fake.records["lite"]["paths"] = ["src/math.py"]
+    app.dependency_overrides[get_github] = lambda: fake
+    try:
+        client = TestClient(app)
+        response = client.get("/v1/status?repo=lite", headers={"X-API-Key": "test-key"})
+        assert response.status_code == 200, response.text
+        warnings = response.json()["warnings"]
+        assert any("skip-Actions marker" in warning for warning in warnings)
+        assert any("src/math.py" in warning for warning in warnings)
     finally:
         app.dependency_overrides.clear()
 
