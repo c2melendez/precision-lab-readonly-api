@@ -1,5 +1,7 @@
 name: Observer API CI
 
+# Pre-merge validation runs through pull_request.
+# workflow_dispatch is only available after this file exists on the default branch.
 on:
   pull_request:
     branches: [main]
