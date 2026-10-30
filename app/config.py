@@ -25,6 +25,7 @@ class Settings:
     service_api_key: str
     request_timeout_seconds: float = 15.0
     bridge_api_key: str = ""
+    bridge_dispatch_api_key: str = ""
     bridge_base_url: str = "https://cert-runner-compass.lovable.app"
     bridge_timeout_seconds: float = 90.0
 
@@ -35,6 +36,7 @@ class Settings:
             service_api_key=os.getenv("SERVICE_API_KEY", "").strip(),
             request_timeout_seconds=float(os.getenv("GITHUB_TIMEOUT_SECONDS", "15")),
             bridge_api_key=os.getenv("llm", "").strip(),
+            bridge_dispatch_api_key=os.getenv("BRIDGE_DISPATCH_KEY", "").strip(),
             bridge_base_url=os.getenv("BRIDGE_BASE_URL", "https://cert-runner-compass.lovable.app").strip().rstrip("/"),
             bridge_timeout_seconds=float(os.getenv("BRIDGE_TIMEOUT_SECONDS", "90")),
         )
