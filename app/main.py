@@ -26,9 +26,9 @@ from .service import (
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 app = FastAPI(
-    title="Precision Lab Certification Read-only API",
+    title="Precision Lab Observer API",
     version="0.1.0",
-    summary="Read-only continuity, gate-planning, and GitHub Actions evidence for Precision Lab Lite and Plus.",
+    summary="Observe, plan, dispatch through Bridge, and reconcile Precision Lab Lite and Plus certification.",
     description=(
         "Single LLM-facing control plane for Precision Lab. It observes certification state, "
         "plans permitted gates, and may request a scoped dispatch through the internal Bridge. "
