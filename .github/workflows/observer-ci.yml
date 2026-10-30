@@ -1,6 +1,8 @@
 name: Observer API CI
 
 on:
+  push:
+    branches: [feature/bridge-readonly-run-status]
   pull_request:
     branches: [main]
   workflow_dispatch:
