@@ -3,6 +3,7 @@ from __future__ import annotations
 import hmac
 import os
 from typing import Annotated, Iterator, Literal
+from uuid import UUID
 
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
@@ -11,6 +12,7 @@ from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.security import APIKeyHeader
 
+from .bridge_api import BridgeApiError, get_bridge_run
 from .config import Settings
 from .github_api import GitHubApiError, GitHubReadClient
 from .models import ErrorResponse, GatePlanResponse, RunEvidenceResponse, StatusResponse
@@ -75,6 +77,14 @@ async def github_error_handler(_request: Request, exc: GitHubApiError):
     status_code = exc.status_code if exc.status_code in (404, 502, 503) else 502
     body = {"error": "upstream_error", "detail": exc.message, "read_only": True}
     return JSONResponse(status_code=status_code, content=body)
+
+
+@app.exception_handler(BridgeApiError)
+async def bridge_error_handler(_request: Request, exc: BridgeApiError):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": "bridge_upstream_error", "detail": exc.message, "read_only": True},
+    )
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -178,6 +188,24 @@ def gate_plan(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=f"Planner refused incomplete source evidence: {exc}") from exc
+
+
+@app.get(
+    "/v1/bridge/runs/{run_id}",
+    tags=["Bridge"],
+    dependencies=[Depends(require_api_key)],
+    responses={
+        401: {"model": ErrorResponse, "description": "Missing or invalid Observador API key"},
+        404: {"model": ErrorResponse, "description": "Bridge run not found or not owned by the configured Bridge key"},
+        422: {"model": ErrorResponse, "description": "Invalid Bridge run UUID"},
+        502: {"model": ErrorResponse, "description": "Bridge is unavailable or returned invalid data"},
+        503: {"model": ErrorResponse, "description": "Bridge credential or URL is not configured, or rejected"},
+    },
+)
+def bridge_run_status(run_id: UUID):
+    """Read one Bridge run receipt; does not dispatch a workflow."""
+    payload = get_bridge_run(str(run_id), Settings.from_env())
+    return {"read_only": True, "bridge_run": payload}
 
 
 @app.get(
