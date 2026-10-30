@@ -1,11 +1,10 @@
 openapi: 3.1.0
 info:
-  title: Precision Lab Certification Read-only API
-  summary: Read-only continuity, gate-planning, and GitHub Actions evidence for Precision
-    Lab Lite and Plus.
-  description: Observation-only service for a GPT custom Action. No endpoint can dispatch,
-    cancel, re-run, publish, push, or otherwise mutate certification resources. A
-    GitHub Actions success is raw evidence and never an automatic certification PASS.
+  title: Precision Lab Observer API
+  summary: Observe, plan, dispatch through Bridge, and reconcile Precision Lab certification.
+  description: Single LLM-facing control plane. Observer reads GitHub state and plans gates;
+    it delegates dispatch only to the internal Bridge and never calls GitHub dispatch directly.
+    A GitHub Actions success is raw evidence and never an automatic certification PASS.
   version: 0.1.0
 paths:
   /healthz:
@@ -167,6 +166,84 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /v1/bridge/requests/{idempotency_key}:
+    get:
+      tags:
+      - Bridge
+      summary: Bridge Request Status
+      description: Read and reconcile a Bridge idempotency receipt using a read-scoped Bridge key.
+      operationId: bridge_request_status_v1_bridge_requests__idempotency_key__get
+      security:
+      - APIKeyHeader: []
+      parameters:
+      - name: idempotency_key
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: ^[A-Za-z0-9._:-]+$
+          title: Idempotency Key
+      responses:
+        '200':
+          description: Receipt state reconciled from Bridge.
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Missing or invalid Observer API key.
+        '404':
+          description: Bridge request not found for this key.
+        '422':
+          description: Invalid idempotency key.
+        '502':
+          description: Bridge receipt lookup unavailable.
+        '503':
+          description: Bridge read credential or URL is not configured, or rejected.
+  /v1/bridge/dispatch:
+    post:
+      tags:
+      - Bridge
+      summary: Bridge Dispatch
+      description: Revalidate the live canonical gate plan and delegate an allowed dispatch to Bridge.
+      operationId: bridge_dispatch_v1_bridge_dispatch_post
+      security:
+      - APIKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BridgeDispatchRequest'
+      responses:
+        '200':
+          description: No dispatch was needed; WAIT or REUSE decision.
+          content:
+            application/json:
+              schema:
+                type: object
+        '201':
+          description: Bridge accepted and recorded the dispatch.
+          content:
+            application/json:
+              schema:
+                type: object
+        '202':
+          description: Matching request is already running.
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Missing or invalid Observer API key.
+        '409':
+          description: Stale plan or uncertain outcome; reconcile before retrying.
+        '422':
+          description: Invalid dispatch request.
+        '503':
+          description: Bridge dispatch credential or upstream unavailable.
   /v1/runs/{run_id}:
     get:
       tags:
@@ -935,6 +1012,50 @@ components:
       - served_at
       - repositories
       title: StatusResponse
+    BridgeDispatchRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - target_repo
+      - gate
+      - dry_run
+      - idempotency_key
+      - validation_id
+      - correlation_id
+      - branch
+      - requested_sha
+      properties:
+        target_repo:
+          type: string
+          enum: [lite, plus]
+        gate:
+          type: string
+          enum: [cumulative, h1d, security]
+        dry_run:
+          type: boolean
+        idempotency_key:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: ^[A-Za-z0-9._:-]+$
+        validation_id:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: ^[A-Za-z0-9._:-]+$
+        correlation_id:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: ^[A-Za-z0-9._:-]+$
+        branch:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._/-]*$
+        requested_sha:
+          type: string
+          pattern: ^(?:[a-f0-9]{40}|[a-f0-9]{64})$
   securitySchemes:
     APIKeyHeader:
       type: apiKey
