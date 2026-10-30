@@ -243,6 +243,78 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /v1/bridge/runs/{run_id}:
+    get:
+      tags:
+      - Bridge
+      summary: Bridge Run Status
+      description: >-
+        Read the status of an existing Bridge receipt by its internal UUID.
+        This is a GET-only proxy. It may update Bridge audit/last-used metadata
+        or reconcile receipt state, but it never creates a run or dispatches
+        GitHub Actions. The incoming Observador API key is separate from the
+        outbound Bridge key and neither credential is returned.
+      operationId: bridge_run_status_v1_bridge_runs__run_id__get
+      security:
+      - APIKeyHeader: []
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        description: Internal Bridge receipt UUID; not a GitHub Actions numeric run ID.
+        schema:
+          type: string
+          format: uuid
+          title: Bridge Run Id
+      responses:
+        '200':
+          description: Existing Bridge receipt status
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - read_only
+                - bridge_run
+                properties:
+                  read_only:
+                    type: boolean
+                    const: true
+                  bridge_run:
+                    type: object
+                    description: Bridge receipt and observed upstream workflow status.
+                    additionalProperties: true
+        '401':
+          description: Missing or invalid Observador X-API-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Receipt not found or not owned by the authorized Bridge key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid Bridge receipt UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Invalid or failed Bridge upstream response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Bridge upstream or required configuration unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   schemas:
     ActionJob:
