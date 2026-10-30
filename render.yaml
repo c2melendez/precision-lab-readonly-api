@@ -17,7 +17,7 @@ services:
       - key: BRIDGE_BASE_URL
         value: "https://cert-runner-compass.lovable.app"
       - key: BRIDGE_TIMEOUT_SECONDS
-        value: "15"
+        value: "90"
       - key: PUBLIC_BASE_URL
         value: "https://precision-lab-readonly-api.onrender.com"
       - key: GITHUB_TIMEOUT_SECONDS

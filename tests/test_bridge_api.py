@@ -116,3 +116,11 @@ def test_bridge_status_route_is_get_only_and_uses_observer_authentication():
     assert "get" in route
     assert not any(method in route for method in ("post", "put", "patch", "delete"))
     assert route["get"]["security"] == [{"APIKeyHeader": []}]
+
+
+def test_bridge_timeout_defaults_to_ninety_seconds_and_supports_override(monkeypatch):
+    monkeypatch.delenv("BRIDGE_TIMEOUT_SECONDS", raising=False)
+    assert Settings.from_env().bridge_timeout_seconds == 90.0
+
+    monkeypatch.setenv("BRIDGE_TIMEOUT_SECONDS", "23")
+    assert Settings.from_env().bridge_timeout_seconds == 23.0
