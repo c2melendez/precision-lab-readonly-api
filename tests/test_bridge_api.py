@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.bridge_api import BridgeApiError, dispatch_bridge_run, get_bridge_run
+from app.bridge_api import BridgeApiError, dispatch_bridge_run, get_bridge_request, get_bridge_run
 from app.config import Settings
 from fastapi.testclient import TestClient
 from app.main import app
@@ -298,3 +298,65 @@ def test_dispatch_route_requires_canonical_branch_and_sha_and_calls_bridge(monke
         assert seen["payload"]["requested_sha"] == "a" * 40
     finally:
         app.dependency_overrides.clear()
+
+
+
+def test_bridge_receipt_lookup_uses_read_scoped_key_and_reconciles(monkeypatch):
+    seen = {}
+
+    class FakeResponse:
+        status_code = 200
+        @staticmethod
+        def json():
+            return {"idempotency_id": "claim-1", "state": "SUCCEEDED", "outcome_state": "SUCCEEDED"}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            seen["client_kwargs"] = kwargs
+        def __enter__(self):
+            return self
+        def __exit__(self, *_args):
+            return False
+        def get(self, url, headers):
+            seen.update(url=url, headers=headers)
+            return FakeResponse()
+
+    monkeypatch.setattr("app.bridge_api.httpx.Client", FakeClient)
+    settings = Settings(
+        github_token="", service_api_key="", bridge_api_key="read-only-secret",
+        bridge_dispatch_api_key="dispatch-only-secret", bridge_base_url="https://bridge.example",
+    )
+    result = get_bridge_request("validation-1", settings)
+    assert result["state"] == "SUCCEEDED"
+    assert seen["url"] == "https://bridge.example/api/runs/lookup"
+    assert seen["headers"]["X-Bridge-Key"] == "read-only-secret"
+    assert seen["headers"]["Idempotency-Key"] == "validation-1"
+    assert "dispatch-only-secret" not in str(seen["headers"])
+
+
+def test_bridge_receipt_reconciliation_route_requires_observer_auth(monkeypatch):
+    monkeypatch.setenv("SERVICE_API_KEY", "observer-secret")
+    response = TestClient(app).get("/v1/bridge/requests/validation-1")
+    assert response.status_code == 401
+
+
+def test_bridge_receipt_reconciliation_route_uses_read_credential(monkeypatch):
+    monkeypatch.setenv("SERVICE_API_KEY", "observer-secret")
+    monkeypatch.setenv("llm", "read-only-secret")
+    monkeypatch.setenv("BRIDGE_BASE_URL", "https://bridge.example")
+    seen = {}
+    def fake_lookup(key, settings):
+        seen["key"] = key
+        seen["url"] = settings.bridge_base_url
+        return {"idempotency_id": "claim-1", "state": "RUNNING"}
+    monkeypatch.setattr("app.main.get_bridge_request", fake_lookup)
+    response = TestClient(app).get(
+        "/v1/bridge/requests/validation-1",
+        headers={"X-API-Key": "observer-secret"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "read_only": True,
+        "bridge_request": {"idempotency_id": "claim-1", "state": "RUNNING"},
+    }
+    assert seen == {"key": "validation-1", "url": "https://bridge.example"}
