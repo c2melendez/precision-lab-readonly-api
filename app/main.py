@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.security import APIKeyHeader
 
-from .bridge_api import BridgeApiError, dispatch_bridge_run, get_bridge_run
+from .bridge_api import BridgeApiError, dispatch_bridge_run, get_bridge_request, get_bridge_run
 from .config import Settings
 from .github_api import GitHubApiError, GitHubReadClient
 from .models import BridgeDispatchRequest, ErrorResponse, GatePlanResponse, RunEvidenceResponse, StatusResponse
@@ -218,6 +218,26 @@ def bridge_run_status(run_id: UUID):
     """Read one Bridge run receipt; does not dispatch a workflow."""
     payload = get_bridge_run(str(run_id), Settings.from_env())
     return {"read_only": True, "bridge_run": payload}
+
+
+@app.get(
+    "/v1/bridge/requests/{idempotency_key}",
+    tags=["Bridge"],
+    dependencies=[Depends(require_api_key)],
+    responses={
+        401: {"model": ErrorResponse, "description": "Missing or invalid Observer API key"},
+        404: {"model": ErrorResponse, "description": "Bridge request not found for this read-scoped key"},
+        422: {"model": ErrorResponse, "description": "Invalid idempotency key"},
+        502: {"model": ErrorResponse, "description": "Bridge receipt lookup unavailable"},
+        503: {"model": ErrorResponse, "description": "Bridge read credential or URL is not configured, or rejected"},
+    },
+)
+def bridge_request_status(
+    idempotency_key: Annotated[str, Path(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9._:-]+$")],
+):
+    """Read and reconcile a Bridge idempotency receipt without dispatching."""
+    payload = get_bridge_request(idempotency_key, Settings.from_env())
+    return {"read_only": True, "bridge_request": payload}
 
 
 @app.post(
