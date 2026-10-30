@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.bridge_api import get_bridge_run
+from app.bridge_api import BridgeApiError, get_bridge_run
 from app.config import Settings
 from fastapi.testclient import TestClient
 from app.main import app
@@ -103,7 +103,16 @@ def test_bridge_client_refuses_non_https_url():
     )
     try:
         get_bridge_run("00000000-0000-0000-0000-000000000001", settings)
-    except Exception as exc:
-        assert getattr(exc, "status_code", None) == 503
+    except BridgeApiError as exc:
+        assert exc.status_code == 503
     else:
         raise AssertionError("Non-HTTPS Bridge URL must be refused")
+
+
+def test_bridge_status_route_is_get_only_and_uses_observer_authentication():
+    schema = app.openapi()
+    route = schema["paths"]["/v1/bridge/runs/{run_id}"]
+
+    assert "get" in route
+    assert not any(method in route for method in ("post", "put", "patch", "delete"))
+    assert route["get"]["security"] == [{"APIKeyHeader": []}]
