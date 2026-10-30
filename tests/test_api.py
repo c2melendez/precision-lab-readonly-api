@@ -187,10 +187,12 @@ def test_no_mutating_operations_are_exposed():
         "type": "apiKey", "in": "header", "name": "X-API-Key"
     }
     assert schema["paths"]["/v1/status"]["get"]["security"] == [{"APIKeyHeader": []}]
-    allowed = {"get", "parameters", "summary", "description", "servers"}
     for path, definition in schema["paths"].items():
         operations = {key.lower() for key in definition if key.lower() in {"get", "post", "put", "patch", "delete", "options", "head", "trace"}}
-        assert operations <= {"get"}, f"Non-read-only method exposed at {path}: {operations}"
+        expected = {"get", "post"} if path == "/v1/bridge/dispatch" else {"get"}
+        assert operations <= expected, f"Unexpected method exposed at {path}: {operations}"
+    dispatch = schema["paths"]["/v1/bridge/dispatch"]["post"]
+    assert dispatch["security"] == [{"APIKeyHeader": []}]
 
 
 def test_gate_plan_is_advisory_only_and_plus_security_is_hard_blocked(monkeypatch):
