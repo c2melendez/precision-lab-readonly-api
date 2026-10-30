@@ -16,7 +16,7 @@ Servicio HTTP para que un GPT personalizado consulte el estado de Precision Lab 
 | GET | `/v1/runs/{run_id}?repo=lite\|plus` | Evidencia bruta de Actions, jobs/pasos y registro del runner relacionado cuando puede encontrarse. |
 | GET | `/openapi.json` / `/openapi.yaml` | Especificación importable para GPT Actions. |
 
-La API acepta únicamente los alias `lite` y `plus`, no nombres de repositorio arbitrarios. Responde con `Cache-Control: no-store` y `X-Read-Only: true`. Todas las operaciones documentadas de la API de certificación son GET. `success` de GitHub Actions nunca se transforma automáticamente en `PASS`.
+La API acepta únicamente los alias `lite` y `plus`, no nombres de repositorio arbitrarios. Responde con `Cache-Control: no-store` y `X-Read-Only: true`. Todas las rutas de Observador son GET y no despachan ejecuciones. La ruta Bridge usa el secreto `llm` solo en el encabezado `X-Bridge-Key`; la autenticación entrante de Observador continúa separada mediante `SERVICE_API_KEY` en `X-API-Key`. El endpoint de estado Bridge puede actualizar last-used/audit y reconciliar estado en Compass, pero no inicia un dispatch. `success` de GitHub Actions nunca se transforma automáticamente en `PASS`.
 
 ## Seguridad requerida
 
@@ -29,6 +29,10 @@ Configura `GITHUB_READ_TOKEN` como un fine-grained token restringido a `c2melend
 - Metadata: Read (permiso de lectura estándar del repositorio).
 
 No uses el PAT de escritura `GH_TOKEN` del Certification Runner. La API no contiene métodos para enviar solicitudes POST/PATCH/PUT/DELETE a GitHub. El cliente `GitHubReadClient` solo implementa GET.
+
+### Bridge de ejecución
+
+Configura `llm` en Render con una clave emitida por Compass y `BRIDGE_BASE_URL` con el origen HTTPS del Bridge. El valor `llm` se envía solo en `X-Bridge-Key` desde `GET /v1/bridge/runs/{run_id}`. No se muestra, registra ni devuelve al cliente. Esta ruta es de lectura y no crea ni despacha ejecuciones. Cuando Bridge migre a un host independiente, cambia `BRIDGE_BASE_URL` después de validar el nuevo servicio y su nueva clave.
 
 ### GPT Action
 
@@ -54,7 +58,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 pytest -q
 ```
 
-Copia `.env.example` a `.env` **solo localmente** y configura `GITHUB_READ_TOKEN` y `SERVICE_API_KEY`. No añadas `.env` al repositorio.
+Copia `.env.example` a `.env` **solo localmente**. Configura `GITHUB_READ_TOKEN`, `SERVICE_API_KEY`, `llm` y `BRIDGE_BASE_URL` en el entorno seguro. No añadas `.env` al repositorio. `llm` es una credencial Bridge, no un token de GitHub ni una contraseña PostgreSQL.
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000
