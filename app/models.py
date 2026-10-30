@@ -15,6 +15,19 @@ class ErrorResponse(APIModel):
     read_only: Literal[True] = True
 
 
+class BridgeDispatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_repo: Literal["lite", "plus"]
+    gate: Literal["cumulative", "h1d", "security"]
+    dry_run: bool
+    idempotency_key: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9._:-]+$")
+    validation_id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9._:-]+$")
+    correlation_id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9._:-]+$")
+    branch: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+    requested_sha: str = Field(pattern=r"^(?:[a-f0-9]{40}|[a-f0-9]{64})$")
+
+
 class Blocker(APIModel):
     id: str
     status: str

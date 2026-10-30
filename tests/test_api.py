@@ -158,7 +158,25 @@ def test_status_is_read_only_and_sanitizes_document_package_url(monkeypatch):
         assert "evil.example" not in response.text
         assert record["runner_run_url"] == "https://github.com/c2melendez/precision-lab-lite/actions/runs/1234"
         assert record["dispatched_run_url"] == "https://github.com/c2melendez/precision-lab-lite/actions/runs/555"
-        assert any("[skip ci]" in warning for warning in payload["warnings"])
+        assert not any("skip-Actions marker" in warning for warning in payload["warnings"])
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_status_warns_on_skip_marker_when_docs_package_changes_gate_inputs(monkeypatch):
+    monkeypatch.setenv("SERVICE_API_KEY", "test-key")
+    fake = FakeGitHub()
+    # A historical docs publication that also changes a technical gate input
+    # must be surfaced for reconciliation; prose-only paths should not warn.
+    fake.records["lite"]["paths"] = ["src/math.py"]
+    app.dependency_overrides[get_github] = lambda: fake
+    try:
+        client = TestClient(app)
+        response = client.get("/v1/status?repo=lite", headers={"X-API-Key": "test-key"})
+        assert response.status_code == 200, response.text
+        warnings = response.json()["warnings"]
+        assert any("skip-Actions marker" in warning for warning in warnings)
+        assert any("src/math.py" in warning for warning in warnings)
     finally:
         app.dependency_overrides.clear()
 
@@ -169,10 +187,12 @@ def test_no_mutating_operations_are_exposed():
         "type": "apiKey", "in": "header", "name": "X-API-Key"
     }
     assert schema["paths"]["/v1/status"]["get"]["security"] == [{"APIKeyHeader": []}]
-    allowed = {"get", "parameters", "summary", "description", "servers"}
     for path, definition in schema["paths"].items():
         operations = {key.lower() for key in definition if key.lower() in {"get", "post", "put", "patch", "delete", "options", "head", "trace"}}
-        assert operations <= {"get"}, f"Non-read-only method exposed at {path}: {operations}"
+        expected = {"get", "post"} if path == "/v1/bridge/dispatch" else {"get"}
+        assert operations <= expected, f"Unexpected method exposed at {path}: {operations}"
+    dispatch = schema["paths"]["/v1/bridge/dispatch"]["post"]
+    assert dispatch["security"] == [{"APIKeyHeader": []}]
 
 
 def test_gate_plan_is_advisory_only_and_plus_security_is_hard_blocked(monkeypatch):

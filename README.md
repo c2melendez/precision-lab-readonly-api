@@ -1,10 +1,8 @@
-# Precision Lab — API de certificación de solo lectura
+# Precision Lab — Observer API de certificación
 
-**Estado actualizado (corte 2026-10-26 21:00 UTC):** el planificador v2 está desplegado en Render. El deploy `dep-dbfnu8nlk1mc73fksl6g` figura `live` sobre el commit `b6d5efdcae0802d5b5a24c79d8d7373bfa9e1acd`. Los logs de producción confirman `GET /healthz` → `200` y `GET /openapi.json` → `200`; también confirman que `GET /v1/status` sin credenciales devuelve `401`, comportamiento esperado para una ruta protegida.
+**Estado de implementación (2026-10-30):** Observer es el único punto de integración del LLM. Su rama de trabajo incorpora planificación live, dispatch protegido mediante Bridge y reconciliación por clave idempotente. El CI de Observer se está validando en el PR; no se afirma despliegue ni E2E hasta verificar el flujo staging completo.
 
-**Integración todavía no cerrada:** Render continúa reportando `healthCheckPath` vacío aunque `render.yaml` declara `/healthz`, así que hay deriva entre configuración versionada y configuración efectiva del servicio. No se ha probado una llamada autenticada correcta a `/v1/status?repo=both` ni al planificador. La presencia de `GITHUB_READ_TOKEN` y `SERVICE_API_KEY` no se pudo confirmar mediante metadatos; no asumir que faltan ni revelar valores. `autoDeployTrigger` está desactivado: los cambios del repositorio no despliegan por sí solos.
-
-Servicio HTTP para que un GPT personalizado consulte el estado de Precision Lab Lite/Plus sin recibir credenciales de GitHub ni permisos para ejecutar operaciones. No se conecta a los productos como aplicación matemática y no modifica los repositorios.
+Servicio HTTP para que un GPT personalizado consulte el estado de Precision Lab Lite/Plus y solicite ejecuciones permitidas. Observer valida el plan y delega el dispatch en Bridge; nunca recibe credenciales de escritura de GitHub ni llama directamente a GitHub Actions dispatch. No se conecta a los productos como aplicación matemática.
 
 ## Rutas
 
@@ -14,9 +12,12 @@ Servicio HTTP para que un GPT personalizado consulte el estado de Precision Lab 
 | GET | `/v1/status?repo=lite\|plus\|both` | Rama predeterminada/canónica, HEAD, revisión, bloqueos, estado de reconciliación, versión del runner y registro documental más reciente disponible. |
 | GET | `/v1/gates/{gate}/plan?repo=lite\|plus&refresh=true` | Ejecuta la lógica de decisión en modo lectura; nunca inicia un gate. |
 | GET | `/v1/runs/{run_id}?repo=lite\|plus` | Evidencia bruta de Actions, jobs/pasos y registro del runner relacionado cuando puede encontrarse. |
+| GET | `/v1/bridge/runs/{run_id}` | Consulta un recibo Bridge por UUID interno. |
+| GET | `/v1/bridge/requests/{idempotency_key}` | Consulta y reconcilia el recibo Bridge por clave idempotente. |
+| POST | `/v1/bridge/dispatch` | Revalida plan, rama y SHA live; delega en Bridge solo si la decisión es RUN. |
 | GET | `/openapi.json` / `/openapi.yaml` | Especificación importable para GPT Actions. |
 
-La API acepta únicamente los alias `lite` y `plus`, no nombres de repositorio arbitrarios. Responde con `Cache-Control: no-store` y `X-Read-Only: true`. Todas las operaciones documentadas de la API de certificación son GET. `success` de GitHub Actions nunca se transforma automáticamente en `PASS`.
+La API acepta únicamente los alias `lite` y `plus`, no nombres de repositorio arbitrarios. Todas las respuestas usan `Cache-Control: no-store`. Las rutas GET llevan `X-Read-Only: true`; el endpoint POST de dispatch indica `X-Read-Only: false`. La autenticación entrante usa `SERVICE_API_KEY` en `X-API-Key`. Observer usa dos credenciales Bridge distintas: `llm` (scope `read`) y `BRIDGE_DISPATCH_KEY` (scope `dispatch`). `success` de GitHub Actions nunca se transforma automáticamente en `PASS`.
 
 ## Seguridad requerida
 
@@ -29,6 +30,10 @@ Configura `GITHUB_READ_TOKEN` como un fine-grained token restringido a `c2melend
 - Metadata: Read (permiso de lectura estándar del repositorio).
 
 No uses el PAT de escritura `GH_TOKEN` del Certification Runner. La API no contiene métodos para enviar solicitudes POST/PATCH/PUT/DELETE a GitHub. El cliente `GitHubReadClient` solo implementa GET.
+
+### Bridge de ejecución
+
+Configura `llm` en Render con una clave Bridge de scope `read`, `BRIDGE_DISPATCH_KEY` con una clave independiente de scope `dispatch` y `BRIDGE_BASE_URL` con el origen HTTPS del Bridge. La clave de lectura se usa únicamente para GET de recibos; la clave de dispatch únicamente para POST server-to-server. Nunca compartas, registres ni devuelvas ninguna de las dos credenciales.
 
 ### GPT Action
 
@@ -54,7 +59,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 pytest -q
 ```
 
-Copia `.env.example` a `.env` **solo localmente** y configura `GITHUB_READ_TOKEN` y `SERVICE_API_KEY`. No añadas `.env` al repositorio.
+Copia `.env.example` a `.env` **solo localmente**. Configura `GITHUB_READ_TOKEN`, `SERVICE_API_KEY`, `llm`, `BRIDGE_DISPATCH_KEY` y `BRIDGE_BASE_URL` en el entorno seguro. No añadas `.env` al repositorio. `llm` es una credencial Bridge, no un token de GitHub ni una contraseña PostgreSQL.
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -139,6 +144,8 @@ En el corte de 2026-10-26, Lite está en revisión documental r301 y Plus en r31
 - Ambos resultados son evidencia de gates de repositorio, no de la transacción API→Bridge→Runner. La prueba autenticada de `/v1/status?repo=both`, la reconciliación del health check efectivo y el E2E siguen pendientes.
 
 ## Bridge y automatización end-to-end — corte 2026-10-27
+
+Actualización 2026-10-30: se añadió en la rama feature/bridge-readonly-run-status un endpoint GET protegido para consultar el estado de un run de Compass mediante llm/X-Bridge-Key. Está pendiente de revisión y despliegue; su inclusión en esta rama no certifica la conexión en producción.
 
 La búsqueda en los repositorios disponibles no identificó un repositorio/endpoint Bridge inequívoco para la certificación. El término “Bridge” encontrado en Lite corresponde a stores de navegación UI/Argand/Graphing, no a una integración GitHub→API→Runner; no se considera evidencia del Bridge de certificación. El API sigue siendo estrictamente GET/read-only: no puede disparar workflows ni publicar resultados. Por tanto, el circuito de automatización requiere un componente externo identificado y sigue `NOT_YET_VERIFIED`. No crear un endpoint ficticio ni ampliar permisos de la API para suplir ese componente.
 

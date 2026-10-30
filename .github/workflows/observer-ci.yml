@@ -1,0 +1,36 @@
+name: Observer API CI
+
+# Pre-merge validation runs through pull_request.
+# workflow_dispatch is only available after this file exists on the default branch.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A PR update should produce one CI run, not separate push and pull_request runs.
+concurrency:
+  group: observer-api-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+      - name: Run tests
+        run: python -m pytest -q

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hmac
 import os
 from typing import Annotated, Iterator, Literal
+from uuid import UUID
 
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
@@ -11,9 +12,10 @@ from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.security import APIKeyHeader
 
+from .bridge_api import BridgeApiError, dispatch_bridge_run, get_bridge_request, get_bridge_run
 from .config import Settings
 from .github_api import GitHubApiError, GitHubReadClient
-from .models import ErrorResponse, GatePlanResponse, RunEvidenceResponse, StatusResponse
+from .models import BridgeDispatchRequest, ErrorResponse, GatePlanResponse, RunEvidenceResponse, StatusResponse
 from .service import (
     StateMismatchError,
     get_gate_plan,
@@ -24,13 +26,14 @@ from .service import (
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 app = FastAPI(
-    title="Precision Lab Certification Read-only API",
+    title="Precision Lab Observer API",
     version="0.1.0",
-    summary="Read-only continuity, gate-planning, and GitHub Actions evidence for Precision Lab Lite and Plus.",
+    summary="Observe, plan, dispatch through Bridge, and reconcile Precision Lab Lite and Plus certification.",
     description=(
-        "Observation-only service for a GPT custom Action. No endpoint can dispatch, "
-        "cancel, re-run, publish, push, or otherwise mutate certification resources. "
-        "A GitHub Actions success is raw evidence and never an automatic certification PASS."
+        "Single LLM-facing control plane for Precision Lab. It observes certification state, "
+        "plans permitted gates, and may request a scoped dispatch through the internal Bridge. "
+        "It never calls GitHub dispatch directly. A GitHub Actions success is raw evidence and "
+        "never an automatic certification PASS."
     ),
     docs_url=None,
     redoc_url=None,
@@ -43,7 +46,7 @@ async def read_only_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Read-Only"] = "true"
+    response.headers["X-Read-Only"] = "true" if request.method == "GET" else "false"
     return response
 
 
@@ -75,6 +78,25 @@ async def github_error_handler(_request: Request, exc: GitHubApiError):
     status_code = exc.status_code if exc.status_code in (404, 502, 503) else 502
     body = {"error": "upstream_error", "detail": exc.message, "read_only": True}
     return JSONResponse(status_code=status_code, content=body)
+
+
+@app.exception_handler(BridgeApiError)
+async def bridge_error_handler(request: Request, exc: BridgeApiError):
+    if request.url.path == "/v1/bridge/dispatch":
+        uncertain = "DISPATCH_OUTCOME_UNKNOWN" in exc.message
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": "bridge_upstream_error",
+                "detail": exc.message,
+                "action_taken": "unknown" if uncertain else False,
+                "reconcile_required": uncertain,
+            },
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": "bridge_upstream_error", "detail": exc.message, "read_only": True},
+    )
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -178,6 +200,93 @@ def gate_plan(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=f"Planner refused incomplete source evidence: {exc}") from exc
+
+
+@app.get(
+    "/v1/bridge/runs/{run_id}",
+    tags=["Bridge"],
+    dependencies=[Depends(require_api_key)],
+    responses={
+        401: {"model": ErrorResponse, "description": "Missing or invalid Observador API key"},
+        404: {"model": ErrorResponse, "description": "Bridge run not found or not owned by the configured Bridge key"},
+        422: {"model": ErrorResponse, "description": "Invalid Bridge run UUID"},
+        502: {"model": ErrorResponse, "description": "Bridge is unavailable or returned invalid data"},
+        503: {"model": ErrorResponse, "description": "Bridge credential or URL is not configured, or rejected"},
+    },
+)
+def bridge_run_status(run_id: UUID):
+    """Read one Bridge run receipt; does not dispatch a workflow."""
+    payload = get_bridge_run(str(run_id), Settings.from_env())
+    return {"read_only": True, "bridge_run": payload}
+
+
+@app.get(
+    "/v1/bridge/requests/{idempotency_key}",
+    tags=["Bridge"],
+    dependencies=[Depends(require_api_key)],
+    responses={
+        401: {"model": ErrorResponse, "description": "Missing or invalid Observer API key"},
+        404: {"model": ErrorResponse, "description": "Bridge request not found for this read-scoped key"},
+        422: {"model": ErrorResponse, "description": "Invalid idempotency key"},
+        502: {"model": ErrorResponse, "description": "Bridge receipt lookup unavailable"},
+        503: {"model": ErrorResponse, "description": "Bridge read credential or URL is not configured, or rejected"},
+    },
+)
+def bridge_request_status(
+    idempotency_key: Annotated[str, Path(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9._:-]+$")],
+):
+    """Read and reconcile a Bridge idempotency receipt without dispatching."""
+    payload = get_bridge_request(idempotency_key, Settings.from_env())
+    return {"read_only": True, "bridge_request": payload}
+
+
+@app.post(
+    "/v1/bridge/dispatch",
+    tags=["Bridge"],
+    dependencies=[Depends(require_api_key)],
+    responses={
+        401: {"model": ErrorResponse, "description": "Missing or invalid Observer API key"},
+        409: {"description": "Stale plan or uncertain dispatch outcome; reconcile before retrying"},
+        422: {"model": ErrorResponse, "description": "Invalid dispatch request"},
+        503: {"description": "Bridge dispatch credential or upstream unavailable"},
+    },
+)
+def bridge_dispatch(
+    payload: BridgeDispatchRequest,
+    client: GitHubReadClient = Depends(get_github),
+):
+    """Validate the live canonical plan, then ask the internal Bridge to dispatch."""
+    try:
+        plan = get_gate_plan(client, payload.target_repo, payload.gate)
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc).strip("'")) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except (StateMismatchError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail="Certification state requires reconciliation before dispatch") from exc
+
+    if plan["state_status"] != "CURRENT":
+        return JSONResponse(status_code=409, content={
+            "decision": "RECONCILE",
+            "action_taken": False,
+            "state_status": plan["state_status"],
+            "reconciliation_action": plan.get("reconciliation_action"),
+        })
+    if payload.branch != plan["canonical_branch"] or payload.requested_sha != plan["observed_head"]:
+        raise HTTPException(status_code=409, detail="Requested branch or SHA is not the observed canonical head")
+    gate_decision = plan["gate"]["decision"]
+    if gate_decision != "RUN":
+        status_code = 200 if gate_decision in ("WAIT", "REUSE") else 409
+        return JSONResponse(status_code=status_code, content={
+            "decision": gate_decision,
+            "reason": plan["gate"]["reason"],
+            "action_taken": False,
+            "canonical_branch": plan["canonical_branch"],
+            "observed_head": plan["observed_head"],
+        })
+
+    status_code, result = dispatch_bridge_run(payload.model_dump(), Settings.from_env())
+    return JSONResponse(status_code=status_code, content=result)
 
 
 @app.get(
