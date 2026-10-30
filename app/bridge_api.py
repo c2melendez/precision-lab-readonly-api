@@ -126,3 +126,44 @@ def dispatch_bridge_run(payload: dict, settings: Settings) -> tuple[int, dict]:
     if response.status_code not in (200, 201, 202, 400, 409):
         raise BridgeApiError(502, "Bridge returned an unexpected dispatch HTTP status")
     return response.status_code, safe_body
+
+
+
+def get_bridge_request(idempotency_key: str, settings: Settings) -> dict:
+    """Read/reconcile one Bridge idempotency receipt with a read-scoped key."""
+    if not settings.bridge_api_key:
+        raise BridgeApiError(503, "Bridge read credential is not configured")
+    parsed = urlsplit(settings.bridge_base_url)
+    if (
+        parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+        or parsed.query or parsed.fragment or parsed.path not in ("", "/")
+    ):
+        raise BridgeApiError(503, "Bridge base URL must be a plain HTTPS origin")
+    headers = {
+        "Accept": "application/json",
+        "X-Bridge-Key": settings.bridge_api_key,
+        "Idempotency-Key": idempotency_key,
+        "User-Agent": "precision-lab-readonly-api/0.3",
+    }
+    try:
+        with httpx.Client(timeout=settings.bridge_timeout_seconds, follow_redirects=False) as client:
+            response = client.get(settings.bridge_base_url.rstrip("/") + "/api/runs/lookup", headers=headers)
+    except httpx.TimeoutException as exc:
+        raise BridgeApiError(502, "Bridge receipt lookup timed out") from exc
+    except httpx.HTTPError as exc:
+        raise BridgeApiError(502, "Could not connect to Bridge receipt lookup") from exc
+    if response.status_code in (401, 403):
+        raise BridgeApiError(503, "Bridge rejected the read-scoped credential")
+    if response.status_code == 404:
+        raise BridgeApiError(404, "Bridge request was not found for this key")
+    if response.status_code == 429 or response.status_code >= 500:
+        raise BridgeApiError(502, "Bridge receipt lookup is temporarily unavailable")
+    if response.status_code != 200:
+        raise BridgeApiError(502, "Bridge returned an unexpected receipt lookup status")
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise BridgeApiError(502, "Bridge returned invalid receipt JSON") from exc
+    if not isinstance(body, dict):
+        raise BridgeApiError(502, "Bridge returned an unexpected receipt response shape")
+    return body
