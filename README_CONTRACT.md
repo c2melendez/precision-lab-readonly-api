@@ -1,6 +1,6 @@
-# Contrato de API de solo lectura para GPT Actions
+# Contrato de API Observer para GPT Actions
 
-**Estado:** implementación local preparada; pendiente de publicar en un repositorio dedicado y desplegar en Render. El host de `openapi.yaml` permanece como marcador hasta conocer la URL real.
+**Estado:** Observer es el único punto de integración para el LLM. Lee estado y planes desde GitHub y solicita dispatch exclusivamente a través del Bridge interno; nunca llama directamente a GitHub Actions dispatch.
 
 ## Fuentes de verdad y coherencia
 
@@ -19,14 +19,14 @@
 - `GET /v1/gates/{gate}/plan?repo=lite|plus&refresh=true`
 - `GET /v1/runs/{run_id}?repo=lite|plus`
 
-La API key se envía por `X-API-Key`. El token de GitHub solo vive en `GITHUB_READ_TOKEN` en el runtime, con permiso Contents: Read y Actions: Read en los dos repositorios. No se utiliza el `GH_TOKEN` con permisos de escritura del runner.
+La API key entrante se envía por `X-API-Key`. El token de GitHub solo vive en `GITHUB_READ_TOKEN` en el runtime, con permiso Contents: Read y Actions: Read en los dos repositorios. Observer no recibe ni utiliza el token GitHub de dispatch.
 
 ## Límites operativos conocidos
 
 - No hay caché: las rutas `/v1/*` consultan GitHub en cada solicitud. El endpoint devuelve `Cache-Control: no-store` y la observación tiene edad cero al momento de responder.
 - La relación entre un run hijo y su registro padre se busca en la cola más reciente de 25 archivos de runner. La ausencia de relación no prueba que nunca exista: el endpoint conserva la evidencia bruta del run y `record_relation=none` cuando no puede reconciliar el enlace en ese conjunto acotado.
 - El runner v3 tiene en sus comentarios la regla de no usar `[skip ci]`, pero los registros documentales r294/r295/r307/r308 incluyen esa marca en el subject. El servicio lo reporta como advertencia; no modifica workflows ni historial.
-- No se exponen endpoints de dispatch, publicación, push, cancelación, reintento, actualización de refs o cambios de configuración.
+- El único endpoint de mutación expuesto por Observer es `POST /v1/bridge/dispatch`; está autenticado por `X-API-Key`, valida primero el plan live y delega el dispatch en Bridge. No existen rutas de publicación, push, cancelación, reintento manual, actualización de refs o cambios de configuración.
 
 ## Endurecimiento adicional de la implementación
 
@@ -35,13 +35,27 @@ La API key se envía por `X-API-Key`. El token de GitHub solo vive en `GITHUB_RE
 - Si la huella técnica de HEAD no coincide con `technical_baseline_sha`, el endpoint de planificación devuelve `REFRESH`/`RECONCILE` antes de consultar históricos de workflows. No se gasta cuota tratando de elegir un gate cuando el estado de continuidad necesita conciliación.
 - Los endpoints `/v1/*` requieren `X-API-Key`; `/healthz` es solo liveness, no acredita conectividad con GitHub.
 
+## Integración Observer → Bridge
+
+### Dispatch protegido
+- `POST /v1/bridge/dispatch` es la única ruta de ejecución de Observer.
+- Antes de llamar a Bridge, Observer recalcula el plan con GitHub live y exige `state_status=CURRENT`, la rama canónica exacta, el SHA HEAD observado y `decision=RUN`. `WAIT`, `REUSE`, `REFRESH`, `RECONCILE`, `DIAGNOSE` o `REVIEW` no generan dispatch.
+- La solicitud exige `target_repo`, `gate`, `dry_run`, `idempotency_key`, `validation_id`, `correlation_id`, `branch` y `requested_sha`. No acepta campos adicionales.
+- Observer llama a `POST /api/runs` solo server-to-server con `BRIDGE_DISPATCH_KEY`, que debe tener scope `dispatch`. El secreto no se devuelve ni se registra.
+- El dispatch es idempotente en Bridge. Si hay timeout o resultado incierto, Observer devuelve `409` con `reconcile_required=true`; no reintenta a ciegas.
+
+### Reconciliación protegida
+- `GET /v1/bridge/requests/{idempotency_key}` consulta `GET /api/runs/lookup` mediante la clave `llm`, que debe tener únicamente scope `read`.
+- La lectura se limita al propietario de la clave Bridge y puede reconciliar el estado observado sin crear ni reintentar workflows.
+- `GET /v1/bridge/runs/{run_id}` conserva la consulta por UUID de recibo.
+
 ## Integración de estado Bridge — GET protegido
 
 ### Ruta
 - `GET /v1/bridge/runs/{run_id}`
 - `run_id` es el UUID interno de una ejecución Bridge (por ejemplo, el UUID de la tabla/recibo Bridge). **No** es el número entero de una ejecución de GitHub Actions.
 - La ruta exige `X-API-Key` con la clave entrante `SERVICE_API_KEY` de Observador.
-- Observador consulta el host configurado por `BRIDGE_BASE_URL` usando el secreto saliente `llm` únicamente como `X-Bridge-Key`. Son credenciales independientes y no se devuelven al cliente.
+- Observador consulta el host configurado por `BRIDGE_BASE_URL` usando el secreto saliente `llm` únicamente como `X-Bridge-Key`. Esta clave tiene scope `read`; no puede ejecutar POST ni hereda permisos de dispatch.
 
 ### Respuestas y errores
 - `200`: recibo encontrado; respuesta marcada `read_only: true`, con el UUID y el estado observado.
@@ -54,7 +68,7 @@ La API key se envía por `X-API-Key`. El token de GitHub solo vive en `GITHUB_RE
 ### Semántica de solo lectura
 La operación upstream es exclusivamente HTTP GET. Puede actualizar metadatos operativos de lectura —por ejemplo, last-used/audit— y reconciliar el estado del recibo en Bridge; por ello “GET” no significa necesariamente ausencia absoluta de escrituras internas de auditoría. No crea recibos, no encola trabajos, no ejecuta ni reintenta workflows, no cancela ejecuciones y no cambia configuración.
 
-**No existe endpoint de dispatch en Observador.** En particular, no se debe invocar `POST /api/runs` desde esta API: el despacho, cuando esté expresamente autorizado, pertenece al operador humano y al servicio Bridge, fuera del contrato GET-only de Observador.
+**No hay aprobación humana por evento.** Observer decide con las políticas y pruebas existentes; las solicitudes rutinarias dentro del alcance se despachan automáticamente a través de Bridge. El LLM nunca conoce la URL interna ni la credencial Bridge. El scope `dispatch` se mantiene separado del scope `read`.
 
 ### Prueba de staging registrada — 2026-10-30
 - Con `X-API-Key`: `200 OK`, `read_only: true`, recibo `94c102a5-5242-48ba-bdb7-4754a57513db`, repositorio `lite`, gate `cumulative`; la respuesta enlazó la ejecución preexistente de Actions `41005884405` con conclusión `success`.
